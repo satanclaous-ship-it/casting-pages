@@ -6,7 +6,7 @@ permalink: /privacy/
 # Privacy Policy
 
 **Effective date**: May 10, 2026
-**Last updated**: May 10, 2026
+**Last updated**: May 10, 2026 (added Calendar section after codebase audit)
 
 This Privacy Policy describes how Casting ("we," "us," or "our") collects, uses, and protects your information when you use the Casting iOS app ("the App").
 
@@ -26,6 +26,9 @@ This data is stored on Supabase so your library and progress sync across your iP
 
 ### Voice
 Casting requires microphone access to listen for spoken affirmations during the ritual. Voice processing happens **entirely on your device** using Apple's on-device speech recognition. **We do not record, store, or transmit your voice to any server.** Voice data never leaves your iPhone.
+
+### Calendar (optional)
+If you grant calendar access, Casting reads your **upcoming event titles only** to craft affirmations that match what your day actually holds. We do not read attendees, notes, locations, descriptions, recurrence rules, or past events. **Calendar data is processed entirely on your device and never transmitted to our servers.** You can deny or revoke calendar access at any time in iOS Settings — the App still works without it.
 
 ## 2. Information We Do NOT Collect
 
