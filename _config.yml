@@ -1,0 +1,12 @@
+title: Casting
+description: A spoken-affirmation ritual. 30-sec subconscious rewiring.
+theme: jekyll-theme-cayman
+url: https://satanclaous-ship-it.github.io
+baseurl: /casting-pages
+
+# Clean URLs without .html
+permalink: /:title/
+
+# Files to exclude from Jekyll build
+exclude:
+  - README.md
