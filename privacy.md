@@ -6,11 +6,11 @@ permalink: /privacy/
 # Privacy Policy
 
 **Effective date**: May 10, 2026
-**Last updated**: May 10, 2026 (added Calendar section after codebase audit)
+**Last updated**: May 24, 2026 (added Sentry crash & performance monitoring disclosure)
 
 This Privacy Policy describes how Casting ("we," "us," or "our") collects, uses, and protects your information when you use the Casting iOS app ("the App").
 
-We designed Casting to do the absolute minimum needed to make the ritual work. We do not sell your data. We do not use third-party advertising or analytics SDKs. We do not transmit your voice recordings to any server.
+We designed Casting to do the absolute minimum needed to make the ritual work. We do not sell your data. We do not use third-party advertising or behavioral analytics SDKs. We do not transmit your voice recordings to any server.
 
 ## 1. Information We Collect
 
@@ -30,9 +30,12 @@ Casting requires microphone access to listen for spoken affirmations during the 
 ### Calendar (optional)
 If you grant calendar access, Casting reads your **upcoming event titles only** to craft affirmations that match what your day actually holds. We do not read attendees, notes, locations, descriptions, recurrence rules, or past events. **Calendar data is processed entirely on your device and never transmitted to our servers.** You can deny or revoke calendar access at any time in iOS Settings — the App still works without it.
 
+### Crash and performance diagnostics
+We use **Sentry** for crash and performance monitoring only. When the App crashes or encounters an unhandled error, Sentry sends a diagnostic report containing the stack trace, device model, OS version, and App version. This report is **not linked to your account** and contains **no personal information, no behavioral analytics, no advertising identifiers, and no content you wrote or spoke.** It is used solely to find and fix bugs. See [Sentry's privacy policy](https://sentry.io/privacy/).
+
 ## 2. Information We Do NOT Collect
 
-- We do **not** use third-party analytics SDKs (no Google Analytics, no Mixpanel, no Amplitude)
+- We do **not** use behavioral analytics SDKs (no Google Analytics, no Mixpanel, no Amplitude)
 - We do **not** use advertising SDKs or tracking
 - We do **not** collect device identifiers for advertising (IDFA)
 - We do **not** access your contacts, calendar, photos, location, or other personal data outside the App
@@ -47,11 +50,12 @@ We use the information we collect to:
 
 ## 4. Third-Party Services
 
-We use the following third-party service to operate Casting:
+We use the following third-party services to operate Casting:
 
 - **Supabase** — handles authentication and data sync. See [Supabase's privacy policy](https://supabase.com/privacy).
+- **Sentry** — receives crash reports and performance diagnostics so we can fix bugs quickly. No PII, no advertising, no behavioral tracking. See [Sentry's privacy policy](https://sentry.io/privacy/).
 
-We do not share your information with any other third parties for marketing, advertising, or analytics.
+We do not share your information with any other third parties for marketing, advertising, or behavioral analytics.
 
 ## 5. Data Retention
 
