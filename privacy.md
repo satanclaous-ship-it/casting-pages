@@ -6,7 +6,7 @@ permalink: /privacy/
 # Privacy Policy
 
 **Effective date**: May 10, 2026
-**Last updated**: May 24, 2026 (added Sentry crash & performance monitoring disclosure)
+**Last updated**: May 25, 2026 (added anonymous lifecycle analytics disclosure)
 
 This Privacy Policy describes how Casting ("we," "us," or "our") collects, uses, and protects your information when you use the Casting iOS app ("the App").
 
@@ -33,13 +33,25 @@ If you grant calendar access, Casting reads your **upcoming event titles only** 
 ### Crash and performance diagnostics
 We use **Sentry** for crash and performance monitoring only. When the App crashes or encounters an unhandled error, Sentry sends a diagnostic report containing the stack trace, device model, OS version, and App version. This report is **not linked to your account** and contains **no personal information, no behavioral analytics, no advertising identifiers, and no content you wrote or spoke.** It is used solely to find and fix bugs. See [Sentry's privacy policy](https://sentry.io/privacy/).
 
+### Anonymous lifecycle analytics
+To understand whether the ritual is actually forming a daily habit for real users, the App records a small set of anonymous lifecycle events to our own Supabase backend:
+
+- App opened, onboarding completed, alarm set, alarm fired
+- Ritual started, ritual completed, or which stage you stopped at (trap / prep / speak / grounding)
+- Tapping the "Coming Soon" Personalize entry point
+
+Each event carries only an **anonymous per-install identifier** (a random UUID generated on first launch, stored only on your device) and a timestamp. **No third-party analytics SDK is used** — these events go directly to our own Supabase database, never to Google Analytics, Mixpanel, Amplitude, or any other behavioral analytics vendor. The events contain **no email, no name, no voice, no transcript, no affirmation text, no personal affirmation, no advertising identifier, and no device serial.**
+
+We use this data only to answer one question for the first month of launch: do people repeat the ritual, and where do they drop off? It is not used for advertising, personalization, or sale.
+
 ## 2. Information We Do NOT Collect
 
-- We do **not** use behavioral analytics SDKs (no Google Analytics, no Mixpanel, no Amplitude)
+- We do **not** use any third-party behavioral analytics SDK (no Google Analytics, no Mixpanel, no Amplitude, no Firebase Analytics)
 - We do **not** use advertising SDKs or tracking
 - We do **not** collect device identifiers for advertising (IDFA)
 - We do **not** access your contacts, calendar, photos, location, or other personal data outside the App
 - We do **not** record or transmit audio
+- We do **not** transmit the text of any affirmation you wrote, favorited, or spoke
 
 ## 3. How We Use Your Information
 
