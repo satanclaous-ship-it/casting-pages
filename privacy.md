@@ -6,7 +6,7 @@ permalink: /privacy/
 # Privacy Policy
 
 **Effective date**: May 10, 2026
-**Last updated**: May 25, 2026 (added anonymous lifecycle analytics disclosure)
+**Last updated**: May 26, 2026 (added `star_placed` bonus engagement event to the disclosed lifecycle list)
 
 This Privacy Policy describes how Casting ("we," "us," or "our") collects, uses, and protects your information when you use the Casting iOS app ("the App").
 
@@ -38,6 +38,7 @@ To understand whether the ritual is actually forming a daily habit for real user
 
 - App opened, onboarding completed, alarm set, alarm fired
 - Ritual started, ritual completed, or which stage you stopped at (trap / prep / speak / grounding)
+- Star placed (the bonus reward step after a ritual)
 - Tapping the "Coming Soon" Personalize entry point
 
 Each event carries only an **anonymous per-install identifier** (a random UUID generated on first launch, stored only on your device) and a timestamp. **No third-party analytics SDK is used** — these events go directly to our own Supabase database, never to Google Analytics, Mixpanel, Amplitude, or any other behavioral analytics vendor. The events contain **no email, no name, no voice, no transcript, no affirmation text, no personal affirmation, no advertising identifier, and no device serial.**
