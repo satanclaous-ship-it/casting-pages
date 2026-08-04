@@ -328,6 +328,58 @@ label.field > span.lbl {
 }
 .seg button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text-1); }
 
+/* ── quick mode: big targets, no keyboard ─────────────────── */
+
+.tag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 7px;
+}
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;          /* thumb-sized — this is the walking-around control */
+  padding: 8px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+}
+.tag .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot, var(--text-muted)); flex: none; }
+.tag[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text-1); }
+.tag .n { font-size: 10px; color: var(--text-muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.picked {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-size: 14px;
+}
+.picked .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--accent)); flex: none; }
+.picked .txt { flex: 1; }
+.picked .x { border: 0; background: none; color: var(--text-2); font-size: 15px; padding: 4px 6px; }
+/* an author `display` beats the UA's [hidden] rule, so restate it */
+.picked[hidden], .fab[hidden], .tag-grid[hidden] { display: none; }
+
+.mic.big {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
 .mic {
   display: inline-flex;
   align-items: center;

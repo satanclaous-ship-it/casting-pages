@@ -24,6 +24,29 @@ marketing pages but isn't part of them.
 - `tracker/` — the app (no build step, no dependencies)
 - `worker/` — optional Cloudflare Worker for real Web Push; see `worker/README.md`
 
+### Two ways to log a block
+
+- **간편 (quick)** — tap one tag. Category and a default impact come with it, and
+  energy/focus carry forward from the previous block, so a block is two taps.
+  Built for logging while walking. `직전과 동일로 바로 저장` is one tap.
+- **자세히 (detailed)** — type (or dictate) what you actually did, pick a category,
+  add a note. Anything typed here is promoted into the quick grid automatically,
+  so the tag set becomes yours after about a week.
+
+### Which alarms fire on which browser
+
+| | Safari tab (iOS) | Home-screen PWA (iOS 16.4+) | Chrome / Android |
+|---|---|---|---|
+| `.ics` calendar alarm | ✅ | ✅ | ✅ |
+| Web Push (needs `worker/`) | ❌ | ✅ | ✅ |
+| Notification Triggers (no server) | ❌ | ❌ | ✅ |
+| In-page alarm + chime | only while open | only while open | only while open |
+
+On iPhone the `.ics` route is the one that needs neither a server nor a
+home-screen install — iOS Calendar fires it regardless of the browser.
+Whatever fires, a missed block is still recoverable: opening the app offers to
+backfill it.
+
 ## Editing
 
 Markdown files in this repo render as pages via Jekyll on GitHub Pages.

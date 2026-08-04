@@ -31,7 +31,34 @@ const IDEA_STATUS = [
   { k: 'dropped', n: '버림',       d: '' },
 ];
 
+/* Day-one tags so 간편 모드 is usable before any history exists.
+   Anything typed in 자세히 모드 joins this list automatically. */
+const DEFAULT_TAGS = [
+  { act: '개발', cat: 'deep' },
+  { act: '기획·설계', cat: 'deep' },
+  { act: '글쓰기', cat: 'deep' },
+  { act: '이메일·메시지', cat: 'shallow' },
+  { act: '잡무 처리', cat: 'shallow' },
+  { act: '미팅', cat: 'comm' },
+  { act: '통화', cat: 'comm' },
+  { act: '공부·리서치', cat: 'learn' },
+  { act: '운동', cat: 'health' },
+  { act: '산책', cat: 'health' },
+  { act: '식사', cat: 'rest' },
+  { act: '휴식', cat: 'rest' },
+  { act: '이동', cat: 'rest' },
+  { act: '사람 만남', cat: 'social' },
+  { act: 'SNS', cat: 'waste' },
+  { act: '유튜브', cat: 'waste' },
+];
+
+/** Impact is the whole point of the ledger, so quick mode must not drop it.
+ *  The category implies a sane default the user can override in one tap. */
+const IMPACT_BY_CAT = { deep: 2, learn: 1, comm: 1, health: 1, shallow: 1, rest: 1, social: 1, waste: 0 };
+
 const DEFAULTS = {
+  mode: 'quick',
+  tags: DEFAULT_TAGS,
   interval: 30,
   dayStart: '08:00',
   dayEnd: '23:00',
@@ -59,7 +86,9 @@ const DB = {
   entries: load(K.entries, {}),   // { 'YYYY-MM-DD': { '<minuteOffset>': entry } }
   ideas:   load(K.ideas, []),
   reviews: load(K.rev, {}),
-  set:     Object.assign({}, DEFAULTS, load(K.set, {})),
+  // clone the defaults — settings.tags is mutated in place, and without this
+  // that write would reach through into the DEFAULT_TAGS constant
+  set:     Object.assign(structuredClone(DEFAULTS), load(K.set, {})),
 };
 
 const saveEntries = () => save(K.entries, DB.entries);
@@ -223,7 +252,14 @@ const Alarm = {
       meta.reviewed = dk; save(K.meta, meta);
       this.fire('🌙 하루 리뷰', '오늘 어디에 시간을 썼는지 5분만 돌아보기', null, 'review');
     }
-    if (currentView === 'log') renderLog(false);
+    // Follow the clock. Leaving the app open past a block boundary must not
+    // leave the form pointed at a block that already ended — but never yank
+    // it out from under half-typed input.
+    if (editDay === logicalDay() && editSlot !== currentSlot() && draftIsClean()) {
+      loadDraft(logicalDay(), currentSlot());
+    } else if (currentView === 'log') {
+      renderLog(false);
+    }
   },
 
   fire(title, body, slot, act = 'log') {
@@ -449,6 +485,32 @@ function buildCats() {
 }
 const paintCats = () => $$('#catChips .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === draft.cat)));
 
+/** The quick grid: what you actually do, most-used first, then the tags you
+ *  keep pinned. History leads because after a week it beats any default. */
+function quickTags(limit = 18) {
+  const out = [];
+  const seen = new Set();
+  for (const r of recentActs(limit)) {
+    out.push(r); seen.add(r.act);
+  }
+  for (const t of (DB.set.tags || [])) {
+    if (!seen.has(t.act)) { out.push({ ...t, n: 0 }); seen.add(t.act); }
+  }
+  return out.slice(0, limit);
+}
+
+/** Typing an activity in 자세히 모드 promotes it into the quick grid. */
+function rememberTag(act, cat) {
+  const a = (act || '').trim();
+  if (!a) return;
+  DB.set.tags = DB.set.tags || [];
+  const hit = DB.set.tags.find((t) => t.act === a);
+  if (hit) { if (cat && !hit.cat) { hit.cat = cat; saveSet(); } return; }
+  DB.set.tags.unshift({ act: a, cat: cat || '' });
+  DB.set.tags = DB.set.tags.slice(0, 60);
+  saveSet();
+}
+
 /** Activities you actually use, most-recent-and-frequent first. */
 function recentActs(limit = 8) {
   const seen = new Map();
@@ -462,7 +524,44 @@ function recentActs(limit = 8) {
     }
   }
   return Array.from(seen.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, limit)
-    .map(([act, v]) => ({ act, cat: v.cat }));
+    .map(([act, v]) => ({ act, cat: v.cat, n: v.n }));
+}
+
+/* ── mode: 간편(태그) ↔ 자세히(직접 쓰기) ─────────────────── */
+
+function setMode(m, remember = true) {
+  DB.set.mode = m;
+  if (remember) saveSet();
+  $$('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === m)));
+  $('#quickBox').hidden = m !== 'quick';
+  $('#fullBox').hidden = m === 'quick';
+  renderLog();
+}
+
+function renderQuick() {
+  const tags = quickTags();
+  $('#tagGrid').innerHTML = tags.map((t) => `
+    <button type="button" class="tag" data-act="${esc(t.act)}" data-cat="${esc(t.cat || '')}"
+      aria-pressed="${t.act === draft.act}" style="--dot:var(${CAT[t.cat]?.v || '--text-muted'})">
+      <span class="dot"></span>${esc(t.act)}${t.n > 1 ? `<span class="n">${t.n}</span>` : ''}
+    </button>`).join('');
+
+  // free-typed or dictated activities aren't in the grid — show them anyway
+  const box = $('#quickPicked');
+  const inGrid = tags.some((t) => t.act === draft.act);
+  box.hidden = !draft.act || inGrid;
+  if (!box.hidden) {
+    box.style.setProperty('--dot', `var(${CAT[draft.cat]?.v || '--accent'})`);
+    box.querySelector('.txt').textContent = draft.act;
+  }
+}
+
+/** True when the form holds nothing the user would lose by moving off it. */
+function draftIsClean() {
+  const e = getEntry(editDay, editSlot);
+  if (!e) return !draft.act.trim() && !draft.note.trim();
+  return draft.act === (e.act || '') && draft.note === (e.note || '') && draft.cat === (e.cat || '')
+    && draft.energy === (e.energy || 0) && draft.focus === (e.focus || 0) && draft.impact === (e.impact ?? -1);
 }
 
 function loadDraft(dk, off) {
@@ -471,8 +570,22 @@ function loadDraft(dk, off) {
   draft.act = e?.act || ''; draft.cat = e?.cat || '';
   draft.energy = e?.energy || 0; draft.focus = e?.focus || 0;
   draft.impact = e?.impact ?? -1; draft.note = e?.note || '';
+
+  // Empty block: carry energy/focus from the block right before it. Over 30
+  // minutes these barely move, so it's a fair prior — and it's shown as
+  // selected, not hidden, so a wrong guess is one tap from being corrected.
+  if (!e) {
+    const prev = getEntry(dk, off - DB.set.interval);
+    if (prev && !prev.skipped) {
+      draft.energy = prev.energy || 0;
+      draft.focus = prev.focus || 0;
+    }
+  }
+
   $('#fAct').value = draft.act;
   $('#fNote').value = draft.note;
+  $('#noteBox').hidden = !draft.note;
+  $('#noteToggle').textContent = draft.note ? '－ 노트 접기' : '＋ 노트 · 아이디어';
   paintCats();
   paintScale('#sEnergy', draft.energy);
   paintScale('#sFocus', draft.focus);
@@ -499,6 +612,8 @@ function renderLog(full = true) {
   }</small>`;
   const saved = getEntry(editDay, editSlot);
   $('#saveEntry').textContent = saved && !saved.skipped ? '수정 저장' : '저장';
+
+  if (DB.set.mode === 'quick') renderQuick();
 
   // recently used activities
   const rec = recentActs();
@@ -1077,6 +1192,14 @@ function exportMd() {
   download(`30min-${dk}.md`, 'text/markdown;charset=utf-8', L.join('\n'));
 }
 
+function renderTagAdmin() {
+  const tags = DB.set.tags || [];
+  $('#tagAdmin').innerHTML = tags.length
+    ? tags.map((t) => `<button type="button" class="tag" data-act="${esc(t.act)}"
+        style="--dot:var(${CAT[t.cat]?.v || '--text-muted'})"><span class="dot"></span>${esc(t.act)}</button>`).join('')
+    : '<div class="empty" style="grid-column:1/-1">태그가 없어요. 아래에서 추가하세요.</div>';
+}
+
 function storageInfo() {
   let bytes = 0;
   for (const k of Object.values(K)) bytes += (localStorage.getItem(k) || '').length * 2;
@@ -1099,7 +1222,7 @@ function go(v) {
   if (v === 'log') renderLog();
   if (v === 'ideas') renderIdeas();
   if (v === 'review') renderReview();
-  if (v === 'settings') { renderNotifStatus(); storageInfo(); }
+  if (v === 'settings') { renderNotifStatus(); storageInfo(); renderTagAdmin(); }
 }
 
 function routeAction(action, slot) {
@@ -1134,8 +1257,13 @@ function wire() {
   wireMic('#micAct', '#fAct', '#micActHint');
   wireMic('#micNote', '#fNote');
   wireMic('#micIdea', '#ideaText', '#micIdeaHint');
+  // quick mode dictates straight into the activity field, which is hidden there
+  wireMic('#micQuick', '#fAct');
 
-  $('#fAct').addEventListener('input', (e) => { draft.act = e.target.value; });
+  $('#fAct').addEventListener('input', (e) => {
+    draft.act = e.target.value;
+    if (DB.set.mode === 'quick') renderQuick();
+  });
   $('#fNote').addEventListener('input', (e) => { draft.note = e.target.value; });
   $('#sImpact').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -1146,6 +1274,34 @@ function wire() {
     const b = e.target.closest('.chip'); if (!b) return;
     draft.act = b.dataset.act; $('#fAct').value = draft.act;
     if (b.dataset.cat) { draft.cat = b.dataset.cat; paintCats(); }
+  });
+
+  /* ── 간편 모드 ── */
+  $('#modeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    setMode(b.dataset.v);
+  });
+  $('#tagGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('.tag'); if (!b) return;
+    const same = draft.act === b.dataset.act;
+    draft.act = same ? '' : b.dataset.act;
+    draft.cat = same ? '' : (b.dataset.cat || '');
+    // one tap now carries a category and a sensible impact; both stay editable
+    if (!same && draft.impact === -1) draft.impact = IMPACT_BY_CAT[draft.cat] ?? 1;
+    $('#fAct').value = draft.act;
+    paintCats();
+    $$('#sImpact button').forEach((x) => x.setAttribute('aria-pressed', String(Number(x.dataset.v) === draft.impact)));
+    renderQuick();
+  });
+  $('#quickClear').addEventListener('click', () => {
+    draft.act = ''; draft.cat = ''; $('#fAct').value = '';
+    paintCats(); renderQuick();
+  });
+  $('#noteToggle').addEventListener('click', () => {
+    const box = $('#noteBox');
+    box.hidden = !box.hidden;
+    $('#noteToggle').textContent = box.hidden ? '＋ 노트 · 아이디어' : '－ 노트 접기';
+    if (!box.hidden) $('#fNote').focus();
   });
   $('#slotPrev').addEventListener('click', () => {
     const all = slotsOf(); const i = all.indexOf(editSlot);
@@ -1159,11 +1315,14 @@ function wire() {
   });
 
   $('#saveEntry').addEventListener('click', () => {
-    if (!draft.act.trim()) return toast('무엇을 했는지 한 줄만 적어 주세요');
+    if (!draft.act.trim()) {
+      return toast(DB.set.mode === 'quick' ? '태그를 하나 골라 주세요' : '무엇을 했는지 한 줄만 적어 주세요');
+    }
     putEntry(editDay, editSlot, {
       act: draft.act.trim(), cat: draft.cat, energy: draft.energy,
       focus: draft.focus, impact: draft.impact, note: draft.note.trim(), skipped: false,
     });
+    rememberTag(draft.act, draft.cat);
     // a note flagged as an idea also lands in the inbox
     const m = draft.note.match(/^\s*아이디어\s*[:：]\s*([\s\S]+)/);
     if (m) addIdea(m[1], 'ping');
@@ -1183,15 +1342,31 @@ function wire() {
     loadDraft(editDay, all[Math.min(all.length - 1, i + 1)]);
   });
 
-  $('#repeatPrev').addEventListener('click', () => {
+  const prevEntry = () => {
     const all = slotsOf(); const i = all.indexOf(editSlot);
-    let prev = null;
-    for (let j = i - 1; j >= 0; j--) { const e = getEntry(editDay, all[j]); if (e && e.act) { prev = e; break; } }
+    for (let j = i - 1; j >= 0; j--) { const e = getEntry(editDay, all[j]); if (e && e.act && !e.skipped) return e; }
+    return null;
+  };
+  $('#repeatPrev').addEventListener('click', () => {
+    const prev = prevEntry();
     if (!prev) return toast('직전에 기록된 블록이 없어요');
     draft.act = prev.act; draft.cat = prev.cat; draft.impact = prev.impact ?? -1;
-    $('#fAct').value = draft.act; paintCats();
+    $('#fAct').value = draft.act;
+    paintCats(); renderQuick();
     $$('#sImpact button').forEach((x) => x.setAttribute('aria-pressed', String(Number(x.dataset.v) === draft.impact)));
-    toast('직전 블록을 불러왔어요 — 에너지·집중력만 골라 주세요');
+    toast('직전 블록을 불러왔어요 — 에너지·집중력만 확인해 주세요');
+  });
+  // the fastest path there is: still doing the same thing, one tap, done
+  $('#repeatSave').addEventListener('click', () => {
+    const prev = prevEntry();
+    if (!prev) return toast('직전에 기록된 블록이 없어요');
+    putEntry(editDay, editSlot, {
+      act: prev.act, cat: prev.cat, energy: prev.energy, focus: prev.focus,
+      impact: prev.impact ?? -1, note: '', skipped: false,
+    });
+    toast(`${prev.act} — 그대로 저장했어요`);
+    const all = slotsOf(); const i = all.indexOf(editSlot);
+    loadDraft(editDay, all[Math.min(all.length - 1, i + 1)]);
   });
 
   $('#todayList').addEventListener('click', (e) => {
@@ -1283,6 +1458,22 @@ function wire() {
   $('#icsBtn').addEventListener('click', () => Alarm.ics());
   $('#pushBtn').addEventListener('click', () => Alarm.subscribePush());
 
+  $('#newTagCat').innerHTML = CATS.map((c) => `<option value="${c.k}">${esc(c.n)}</option>`).join('');
+  $('#addTag').addEventListener('click', () => {
+    const name = $('#newTagName').value.trim();
+    if (!name) return toast('태그 이름을 적어 주세요');
+    rememberTag(name, $('#newTagCat').value);
+    $('#newTagName').value = '';
+    renderTagAdmin(); renderLog();
+    toast(`"${name}" 태그를 추가했어요`);
+  });
+  $('#tagAdmin').addEventListener('click', (e) => {
+    const b = e.target.closest('.tag'); if (!b) return;
+    DB.set.tags = (DB.set.tags || []).filter((t) => t.act !== b.dataset.act);
+    saveSet(); renderTagAdmin(); renderLog();
+    toast(`"${b.dataset.act}" 태그를 지웠어요`);
+  });
+
   $('#expJson').addEventListener('click', exportJson);
   $('#expCsv').addEventListener('click', exportCsv);
   $('#expMd').addEventListener('click', exportMd);
@@ -1340,6 +1531,7 @@ function boot() {
 
   const p = new URLSearchParams(location.search);
   editSlot = null;
+  setMode(DB.set.mode || 'quick', false);
   loadDraft(logicalDay(), currentSlot());
   if (p.get('view')) go(p.get('view'));
   else if (p.get('action')) routeAction(p.get('action'), p.get('slot') ?? '');
