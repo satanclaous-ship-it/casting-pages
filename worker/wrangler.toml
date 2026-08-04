@@ -1,0 +1,19 @@
+name = "min30-push"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Every minute, so any interval (15/20/25/30/45/60) lands exactly on time.
+# ~1,440 invocations/day — comfortably inside the free plan.
+[triggers]
+crons = ["* * * * *"]
+
+# Create with:  npx wrangler kv namespace create SUBS
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "SUBS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+VAPID_SUBJECT = "mailto:satanclaous@gmail.com"
+# VAPID_PUBLIC_KEY is set as a var by gen-vapid (it is not secret)
+# VAPID_PRIVATE_KEY must be a secret:  npx wrangler secret put VAPID_PRIVATE_KEY
