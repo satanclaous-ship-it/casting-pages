@@ -1,0 +1,297 @@
+import Foundation
+import UserNotifications
+import UIKit
+
+/// Local notifications, scheduled by the OS. No server, no push certificate,
+/// and — unlike the web — the notification itself can log a block: iOS wakes
+/// the app in the background to run the action handler, so a tag button on the
+/// lock screen writes straight to the store without ever opening the app.
+@MainActor
+final class Notifier: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = Notifier()
+
+    private let center = UNUserNotificationCenter.current()
+
+    /// iOS keeps at most 64 pending local notifications per app.
+    private let pendingCap = 60
+
+    private enum ID {
+        static let pingCategory = "min30.ping"
+        static let reviewCategory = "min30.review"
+        static let repeatAction = "min30.repeat"
+        static let ideaAction = "min30.idea"
+        static let openAction = "min30.open"
+        static let tagPrefix = "min30.tag."
+    }
+
+    // MARK: 권한
+
+    func requestAuthorization() async -> Bool {
+        center.delegate = self
+        let ok = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .timeSensitive])) ?? false
+        if ok { await reschedule() }
+        return ok
+    }
+
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
+    }
+
+    func bootstrap() {
+        center.delegate = self
+    }
+
+    // MARK: 카테고리 (알림 위에 뜨는 버튼)
+
+    /// Rebuilt whenever the tag list changes, so the buttons on the lock screen
+    /// are always the things you actually do.
+    func registerCategories() {
+        let store = Store.shared
+        // Four is what iOS realistically shows before collapsing into a list.
+        let topTags = store.quickTags(limit: 3)
+
+        var actions: [UNNotificationAction] = topTags.map {
+            UNNotificationAction(identifier: ID.tagPrefix + $0.name,
+                                 title: $0.name,
+                                 options: [])
+        }
+        actions.append(UNNotificationAction(identifier: ID.repeatAction, title: "직전과 동일", options: []))
+        actions.append(UNTextInputNotificationAction(identifier: ID.ideaAction,
+                                                     title: "아이디어 적기",
+                                                     options: [],
+                                                     textInputButtonTitle: "담기",
+                                                     textInputPlaceholder: "지금 떠오른 것…"))
+
+        let ping = UNNotificationCategory(identifier: ID.pingCategory,
+                                         actions: actions,
+                                         intentIdentifiers: [],
+                                         options: [.customDismissAction])
+
+        let review = UNNotificationCategory(
+            identifier: ID.reviewCategory,
+            actions: [UNNotificationAction(identifier: ID.openAction, title: "리뷰 열기", options: [.foreground])],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        center.setNotificationCategories([ping, review])
+    }
+
+    // MARK: 예약
+
+    func reschedule() async {
+        registerCategories()
+        center.removeAllPendingNotificationRequests()
+
+        let s = Store.shared.settings
+        let iv = max(5, s.interval)
+        let span = s.span
+
+        var requests: [UNNotificationRequest] = []
+
+        if s.weekend {
+            // Daily-repeating triggers never expire, so alarms keep firing even
+            // if the app is never opened again. ~31 of them, well under the cap.
+            for slot in Store.shared.slots {
+                let ring = slot + iv
+                requests.append(pingRequest(slot: slot, ring: ring, weekday: nil, date: nil))
+            }
+            requests.append(reviewRequest(minute: s.reviewAt, weekday: nil, date: nil))
+        } else {
+            // Weekday-only needs one trigger per (weekday × slot), which blows
+            // past 64. So roll a concrete window instead and refresh it every
+            // time the app runs — including the background launches that every
+            // notification action causes.
+            requests = weekdayWindow(span: span, interval: iv, reviewAt: s.reviewAt)
+        }
+
+        for r in requests.prefix(pendingCap) {
+            try? await center.add(r)
+        }
+    }
+
+    private func content(title: String, body: String, category: String, userInfo: [String: Any]) -> UNMutableNotificationContent {
+        let c = UNMutableNotificationContent()
+        c.title = title
+        c.body = body
+        c.categoryIdentifier = category
+        c.userInfo = userInfo
+        c.sound = Store.shared.settings.sound ? .default : nil
+        // A 30-minute ledger is worthless if the ping arrives an hour late.
+        c.interruptionLevel = .timeSensitive
+        c.relevanceScore = 1.0
+        return c
+    }
+
+    private func pingRequest(slot: Int, ring: Int, weekday: Int?, date: Date?) -> UNNotificationRequest {
+        let iv = Store.shared.settings.interval
+        let c = content(
+            title: "⏱ \(Fmt.hhmm(slot))–\(Fmt.hhmm(slot + iv))",
+            body: "뭐 했어? 눌러서 기록하기",
+            category: ID.pingCategory,
+            userInfo: ["slot": slot]
+        )
+        var comps = DateComponents()
+        comps.hour = (ring % 1440) / 60
+        comps.minute = (ring % 1440) % 60
+        if let weekday { comps.weekday = weekday }
+        if let date {
+            let d = Calendar.current.dateComponents([.year, .month, .day], from: date)
+            comps.year = d.year; comps.month = d.month; comps.day = d.day
+        }
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: date == nil)
+        let id = date == nil ? "ping-\(slot)" : "ping-\(slot)-\(Int(date!.timeIntervalSince1970))"
+        return UNNotificationRequest(identifier: id, content: c, trigger: trigger)
+    }
+
+    private func reviewRequest(minute: Int, weekday: Int?, date: Date?) -> UNNotificationRequest {
+        let c = content(
+            title: "🌙 하루 리뷰",
+            body: "오늘 어디에 시간을 썼는지 5분만 돌아보기",
+            category: ID.reviewCategory,
+            userInfo: ["review": true]
+        )
+        var comps = DateComponents()
+        comps.hour = (minute % 1440) / 60
+        comps.minute = (minute % 1440) % 60
+        if let weekday { comps.weekday = weekday }
+        if let date {
+            let d = Calendar.current.dateComponents([.year, .month, .day], from: date)
+            comps.year = d.year; comps.month = d.month; comps.day = d.day
+        }
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: date == nil)
+        let id = date == nil ? "review" : "review-\(Int(date!.timeIntervalSince1970))"
+        return UNNotificationRequest(identifier: id, content: c, trigger: trigger)
+    }
+
+    private func weekdayWindow(span: (start: Int, end: Int, wraps: Bool), interval: Int, reviewAt: Int) -> [UNNotificationRequest] {
+        var out: [UNNotificationRequest] = []
+        let cal = Calendar.current
+        let now = Date()
+        var dayOffset = 0
+        while out.count < pendingCap && dayOffset < 10 {
+            guard let day = cal.date(byAdding: .day, value: dayOffset, to: now) else { break }
+            let wd = cal.component(.weekday, from: day)
+            dayOffset += 1
+            if wd == 1 || wd == 7 { continue }
+            let midnight = cal.startOfDay(for: day)
+            for slot in Store.shared.slots {
+                let fireAt = midnight.addingTimeInterval(TimeInterval((slot + interval) * 60))
+                guard fireAt > now.addingTimeInterval(60), out.count < pendingCap else { continue }
+                out.append(pingRequest(slot: slot, ring: slot + interval, weekday: nil, date: fireAt))
+            }
+            let reviewFire = midnight.addingTimeInterval(TimeInterval(reviewAt * 60))
+            if reviewFire > now, out.count < pendingCap {
+                out.append(reviewRequest(minute: reviewAt, weekday: nil, date: reviewFire))
+            }
+        }
+        return out.sorted { ($0.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() ?? .distantFuture
+            < ($1.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() ?? .distantFuture }
+    }
+
+    func sendTest() {
+        let slot = Store.shared.currentSlot()
+        let c = content(title: "⏱ 테스트 알람", body: "이렇게 \(Store.shared.settings.interval)분마다 울려요",
+                        category: ID.pingCategory, userInfo: ["slot": slot])
+        let r = UNNotificationRequest(identifier: "test-\(UUID().uuidString)", content: c,
+                                      trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false))
+        center.add(r)
+    }
+
+    // MARK: 응답 처리
+
+    /// Foreground: still show it. Missing a ping because the app happened to be
+    /// open is exactly how a time ledger develops holes.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .list]
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let action = response.actionIdentifier
+        let info = response.notification.request.content.userInfo
+        let slot = info["slot"] as? Int
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+
+        await MainActor.run {
+            let store = Store.shared
+            // another background launch may have written since we last loaded
+            store.reloadFromDisk()
+            let day = store.logicalDay()
+            let target = slot ?? store.currentSlot()
+
+            switch action {
+            case ID.ideaAction:
+                if let text { store.addIdea(text, fromPing: true) }
+
+            case ID.repeatAction:
+                if let prev = store.previousEntry(day: day, before: target) {
+                    store.put(day: day, slot: target) {
+                        $0.activity = prev.activity
+                        $0.category = prev.category
+                        $0.energy = prev.energy
+                        $0.focus = prev.focus
+                        $0.impact = prev.impact
+                        $0.skipped = false
+                    }
+                } else {
+                    Router.shared.open(slot: target)
+                }
+
+            case let a where a.hasPrefix(ID.tagPrefix):
+                // The whole point of going native: a lock-screen tap that
+                // records the block without the app ever coming to the front.
+                let name = String(a.dropFirst(ID.tagPrefix.count))
+                let cat = store.quickTags(limit: 40).first { $0.name == name }?.category
+                let prev = store.previousEntry(day: day, before: target)
+                store.put(day: day, slot: target) {
+                    $0.activity = name
+                    $0.category = cat
+                    $0.impact = cat?.defaultImpact ?? 1
+                    // energy/focus barely move in 30 minutes — carry them, and
+                    // the review screen flags anything left unset
+                    $0.energy = prev?.energy ?? 0
+                    $0.focus = prev?.focus ?? 0
+                    $0.skipped = false
+                }
+                store.rememberTag(name, cat)
+
+            case UNNotificationDefaultActionIdentifier:
+                if info["review"] as? Bool == true { Router.shared.openReview() }
+                else { Router.shared.open(slot: target) }
+
+            case ID.openAction:
+                Router.shared.openReview()
+
+            default:
+                break
+            }
+        }
+
+        // keep the rolling window topped up (weekday-only mode needs this)
+        if !Store.shared.settings.weekend {
+            await reschedule()
+        }
+    }
+}
+
+/// Lets a notification action steer the UI when the app does come forward.
+@Observable
+@MainActor
+final class Router {
+    static let shared = Router()
+    var tab = 0
+    var pendingSlot: Int?
+
+    func open(slot: Int) {
+        tab = 0
+        pendingSlot = slot
+    }
+
+    func openReview() { tab = 2 }
+}

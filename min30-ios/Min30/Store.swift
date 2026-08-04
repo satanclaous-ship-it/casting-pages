@@ -1,0 +1,383 @@
+import Foundation
+import Observation
+
+/// Everything the app knows, held in memory and mirrored to one JSON file in
+/// Application Support. A single file keeps notification-action writes (which
+/// run in a briefly-woken background process) trivially correct — load, mutate,
+/// save, done.
+@Observable
+final class Store {
+    static let shared = Store()
+
+    private(set) var entries: [String: [Int: Entry]] = [:]   // day -> slot -> entry
+    var ideas: [Idea] = []
+    var reviews: [String: DayReview] = [:]
+    var settings = Settings()
+
+    private let queue = DispatchQueue(label: "min30.store", qos: .userInitiated)
+
+    // MARK: 저장
+
+    private struct Snapshot: Codable {
+        var entries: [String: [Int: Entry]]
+        var ideas: [Idea]
+        var reviews: [String: DayReview]
+        var settings: Settings
+    }
+
+    private static var fileURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("min30.json")
+    }
+
+    private init() { load() }
+
+    func load() {
+        guard let data = try? Data(contentsOf: Self.fileURL),
+              let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
+        entries = snap.entries
+        ideas = snap.ideas
+        reviews = snap.reviews
+        settings = snap.settings
+    }
+
+    func save() {
+        let snap = Snapshot(entries: entries, ideas: ideas, reviews: reviews, settings: settings)
+        queue.async {
+            guard let data = try? JSONEncoder().encode(snap) else { return }
+            try? data.write(to: Self.fileURL, options: .atomic)
+        }
+    }
+
+    /// A background launch (notification action) may have written while the
+    /// foreground copy sat idle. Re-read before showing anything.
+    func reloadFromDisk() { load() }
+
+    // MARK: 시간 · 블록
+
+    /// Minute offset inside the logical day; past-midnight hours read as > 1440
+    /// so a 2am block still belongs to the day that started it.
+    func offset(of date: Date = Date()) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        let sp = settings.span
+        return (sp.wraps && m < sp.end - 1440) ? m + 1440 : m
+    }
+
+    func logicalDay(_ date: Date = Date()) -> String {
+        let sp = settings.span
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        if sp.wraps && m < sp.end - 1440 {
+            return Fmt.dayKey.string(from: Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date)
+        }
+        return Fmt.dayKey.string(from: date)
+    }
+
+    var slots: [Int] {
+        let sp = settings.span
+        let iv = max(5, settings.interval)
+        var out: [Int] = []
+        var m = sp.start
+        while m + iv <= sp.end {
+            out.append(m)
+            m += iv
+        }
+        return out
+    }
+
+    func currentSlot(_ date: Date = Date()) -> Int {
+        let all = slots
+        guard let first = all.first, let last = all.last else { return 0 }
+        let off = offset(of: date)
+        if off < first { return first }
+        if off >= last { return last }
+        return first + ((off - first) / settings.interval) * settings.interval
+    }
+
+    func isWeekend(_ day: String) -> Bool {
+        guard let d = Fmt.dayKey.date(from: day) else { return false }
+        let wd = Calendar.current.component(.weekday, from: d)
+        return wd == 1 || wd == 7
+    }
+
+    static func addDays(_ day: String, _ n: Int) -> String {
+        guard let d = Fmt.dayKey.date(from: day),
+              let moved = Calendar.current.date(byAdding: .day, value: n, to: d) else { return day }
+        return Fmt.dayKey.string(from: moved)
+    }
+
+    // MARK: 읽기 · 쓰기
+
+    func entry(_ day: String, _ slot: Int) -> Entry? { entries[day]?[slot] }
+
+    func loggedEntries(_ day: String) -> [Entry] {
+        (entries[day] ?? [:]).values.filter(\.isLogged).sorted { $0.slot < $1.slot }
+    }
+
+    @discardableResult
+    func put(day: String, slot: Int, mutate: (inout Entry) -> Void) -> Entry {
+        var e = entries[day]?[slot] ?? Entry(day: day, slot: slot)
+        mutate(&e)
+        e.updatedAt = Date()
+        entries[day, default: [:]][slot] = e
+        save()
+        return e
+    }
+
+    func skip(day: String, slot: Int) {
+        put(day: day, slot: slot) { $0.skipped = true; $0.activity = "" }
+    }
+
+    /// The most recent logged block strictly before `slot` on the same day.
+    func previousEntry(day: String, before slot: Int) -> Entry? {
+        loggedEntries(day).last { $0.slot < slot }
+    }
+
+    // MARK: 태그
+
+    /// History leads, pinned tags fill the rest — after a week your own
+    /// vocabulary beats any default list.
+    func quickTags(limit: Int = 18) -> [Tag] {
+        var counts: [String: (n: Int, cat: Category?)] = [:]
+        let recentDays = entries.keys.sorted(by: >).prefix(14)
+        for day in recentDays {
+            for e in (entries[day] ?? [:]).values where e.isLogged {
+                var cur = counts[e.activity] ?? (0, e.category)
+                cur.n += 1
+                if cur.cat == nil { cur.cat = e.category }
+                counts[e.activity] = cur
+            }
+        }
+        var out: [Tag] = []
+        var seen = Set<String>()
+        for (name, v) in counts.sorted(by: { $0.value.n > $1.value.n }) {
+            out.append(Tag(name: name, category: v.cat ?? .shallow))
+            seen.insert(name)
+            if out.count >= limit { break }
+        }
+        for t in settings.tags where !seen.contains(t.name) {
+            out.append(t)
+            seen.insert(t.name)
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    func rememberTag(_ name: String, _ category: Category?) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        if let i = settings.tags.firstIndex(where: { $0.name == n }) {
+            if let c = category { settings.tags[i].category = c }
+        } else {
+            settings.tags.insert(Tag(name: n, category: category ?? .shallow), at: 0)
+            settings.tags = Array(settings.tags.prefix(60))
+        }
+        save()
+    }
+
+    // MARK: 아이디어
+
+    @discardableResult
+    func addIdea(_ text: String, fromPing: Bool = false) -> Idea? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        let idea = Idea(text: t, day: logicalDay(), slot: currentSlot(), fromPing: fromPing)
+        ideas.insert(idea, at: 0)
+        save()
+        return idea
+    }
+
+    func setIdeaStatus(_ id: UUID, _ status: IdeaStatus) {
+        guard let i = ideas.firstIndex(where: { $0.id == id }) else { return }
+        ideas[i].status = status
+        save()
+    }
+
+    func deleteIdea(_ id: UUID) {
+        ideas.removeAll { $0.id == id }
+        save()
+    }
+
+    // MARK: 집계
+
+    struct CategoryRow: Identifiable {
+        var id: String { category?.rawValue ?? "other" }
+        var category: Category?
+        var title: String
+        var blocks: Int
+        var hours: Double
+        var pct: Int
+    }
+
+    struct DaySummary {
+        var blocks = 0
+        var loggedHours = 0.0
+        var impactHours = 0.0
+        var wasteHours = 0.0
+        var energy = 0.0
+        var focus = 0.0
+        var coverage = 0
+        var ideaCount = 0
+        var rows: [CategoryRow] = []
+
+        var impactPct: Int {
+            loggedHours > 0 ? Int((impactHours / loggedHours * 100).rounded()) : 0
+        }
+    }
+
+    func hours(blocks: Int) -> Double { Double(blocks * settings.interval) / 60 }
+
+    func summarize(_ days: [String]) -> DaySummary {
+        let all = days.flatMap { loggedEntries($0) }
+        var byCat: [Category?: Int] = [:]
+        var eSum = 0, eN = 0, fSum = 0, fN = 0, impact = 0, waste = 0
+        for x in all {
+            byCat[x.category, default: 0] += 1
+            if x.energy > 0 { eSum += x.energy; eN += 1 }
+            if x.focus > 0 { fSum += x.focus; fN += 1 }
+            if x.impact == 2 { impact += 1 }
+            if x.category == .waste { waste += 1 }
+        }
+        let total = all.count
+        var rows: [CategoryRow] = Category.allCases.compactMap { c in
+            let n = byCat[c] ?? 0
+            guard n > 0 else { return nil }
+            return CategoryRow(category: c, title: c.title, blocks: n,
+                               hours: hours(blocks: n),
+                               pct: total > 0 ? Int((Double(n) / Double(total) * 100).rounded()) : 0)
+        }
+        if let n = byCat[nil], n > 0 {
+            rows.append(CategoryRow(category: nil, title: "미분류", blocks: n,
+                                    hours: hours(blocks: n),
+                                    pct: total > 0 ? Int((Double(n) / Double(total) * 100).rounded()) : 0))
+        }
+        rows.sort { $0.blocks > $1.blocks }
+
+        let today = logicalDay()
+        let nowOff = offset()
+        let possible = days.reduce(0) { acc, day in
+            acc + slots.filter { day != today || $0 + settings.interval <= nowOff }.count
+        }
+
+        return DaySummary(
+            blocks: total,
+            loggedHours: hours(blocks: total),
+            impactHours: hours(blocks: impact),
+            wasteHours: hours(blocks: waste),
+            energy: eN > 0 ? Double(eSum) / Double(eN) : 0,
+            focus: fN > 0 ? Double(fSum) / Double(fN) : 0,
+            coverage: possible > 0 ? Int((Double(total) / Double(possible) * 100).rounded()) : 0,
+            ideaCount: ideas.filter { days.contains($0.day) }.count,
+            rows: rows
+        )
+    }
+
+    /// The run of consecutive blocks with the highest average focus — the
+    /// window worth defending for tomorrow's most important work.
+    func bestFocusWindow(_ day: String) -> (from: Int, to: Int, avg: Double)? {
+        let list = loggedEntries(day).filter { $0.focus > 0 }
+        guard list.count >= 2 else { return nil }
+        var best: (from: Int, to: Int, avg: Double)?
+        for i in list.indices {
+            var sum = 0, n = 0
+            for j in i..<min(i + 4, list.count) {
+                guard list[j].slot == list[i].slot + (j - i) * settings.interval else { break }
+                sum += list[j].focus
+                n += 1
+                if n >= 2 {
+                    let avg = Double(sum) / Double(n)
+                    if best == nil || avg > best!.avg {
+                        best = (list[i].slot, list[j].slot + settings.interval, avg)
+                    }
+                }
+            }
+        }
+        return best
+    }
+
+    /// Blocks worth going back for. A fresh install shouldn't open with a
+    /// backlog, and nobody honestly remembers past ~2 hours.
+    func catchUpSlots() -> [Int] {
+        let day = logicalDay()
+        let nowOff = offset()
+        let past = slots.filter { $0 + settings.interval <= nowOff }
+        guard !past.isEmpty else { return [] }
+        let recall = max(2, 120 / max(5, settings.interval))
+        // once the day has started, offer everything since the first log;
+        // before that, only the couple of hours you could actually reconstruct
+        let from = past.first { entry(day, $0) != nil } ?? past.suffix(recall).first!
+        return past.filter { $0 >= from && entry(day, $0) == nil }
+    }
+
+    var hasLoggedToday: Bool {
+        let day = logicalDay()
+        return slots.contains { entry(day, $0) != nil }
+    }
+
+    // MARK: 내보내기
+
+    func exportJSON() -> Data? {
+        try? JSONEncoder().encode(Snapshot(entries: entries, ideas: ideas, reviews: reviews, settings: settings))
+    }
+
+    func exportMarkdown(day: String) -> String {
+        let s = summarize([day])
+        let r = reviews[day] ?? DayReview()
+        var L = ["# \(day) 하루 기록", ""]
+        L.append("- 임팩트 시간: **\(Fmt.hours(s.impactHours))** / 기록 \(Fmt.hours(s.loggedHours))")
+        L.append(String(format: "- 평균 에너지 %.1f · 평균 집중력 %.1f · 기록률 %d%%", s.energy, s.focus, s.coverage))
+        if let w = bestFocusWindow(day) {
+            L.append(String(format: "- 최고 집중 구간: %@–%@ (평균 %.1f)", Fmt.hhmm(w.from), Fmt.hhmm(w.to), w.avg))
+        }
+        L.append(contentsOf: ["", "## 분류별"])
+        L.append(contentsOf: s.rows.map { "- \($0.title): \(Fmt.hours($0.hours)) (\($0.pct)%)" })
+        L.append(contentsOf: ["", "## 타임라인"])
+        for e in loggedEntries(day) {
+            var line = "- `\(Fmt.hhmm(e.slot))` \(e.activity)"
+            if let c = e.category { line += " _(\(c.title))_" }
+            line += " — E\(e.energy > 0 ? String(e.energy) : "–")/F\(e.focus > 0 ? String(e.focus) : "–")"
+            if e.impact == 2 { line += " **임팩트**" }
+            if !e.note.isEmpty { line += "\n    - " + e.note.replacingOccurrences(of: "\n", with: " ") }
+            L.append(line)
+        }
+        let dayIdeas = ideas.filter { $0.day == day }
+        if !dayIdeas.isEmpty {
+            L.append(contentsOf: ["", "## 아이디어"])
+            L.append(contentsOf: dayIdeas.map { "- [\($0.status.title)] " + $0.text.replacingOccurrences(of: "\n", with: " ") })
+        }
+        L.append(contentsOf: ["", "## 회고",
+                              "- 임팩트: \(r.win.isEmpty ? "—" : r.win)",
+                              "- 없앨 낭비: \(r.cut.isEmpty ? "—" : r.cut)",
+                              "- 내일 우선순위: \(r.next.isEmpty ? "—" : r.next)"])
+        return L.joined(separator: "\n")
+    }
+
+    func exportCSV() -> String {
+        func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+        var lines = ["date,slot_start,slot_end,activity,category,energy,focus,impact,note"]
+        for day in entries.keys.sorted() {
+            for slot in (entries[day] ?? [:]).keys.sorted() {
+                guard let e = entries[day]?[slot], e.isLogged else { continue }
+                let impact = e.impact >= 0 && e.impact < 3 ? Scale.impact[e.impact] : ""
+                lines.append([
+                    day, Fmt.hhmm(slot), Fmt.hhmm(slot + settings.interval),
+                    q(e.activity), e.category?.title ?? "",
+                    e.energy > 0 ? String(e.energy) : "",
+                    e.focus > 0 ? String(e.focus) : "",
+                    impact, q(e.note),
+                ].joined(separator: ","))
+            }
+        }
+        return "\u{FEFF}" + lines.joined(separator: "\n")
+    }
+
+    func wipe() {
+        entries = [:]
+        ideas = []
+        reviews = [:]
+        settings = Settings()
+        save()
+    }
+}

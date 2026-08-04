@@ -21,8 +21,10 @@ localStorage — nothing is sent anywhere.
 It is deliberately **not linked from the landing page** — it ships alongside the
 marketing pages but isn't part of them.
 
-- `tracker/` — the app (no build step, no dependencies)
+- `tracker/` — the web app (no build step, no dependencies) — **verified in a browser**
 - `worker/` — optional Cloudflare Worker for real Web Push; see `worker/README.md`
+- `min30-ios/` — the same system as a native iOS app; see `min30-ios/README.md`.
+  **Not yet compiled** — it was written without access to macOS or Xcode.
 
 ### Two ways to log a block
 
