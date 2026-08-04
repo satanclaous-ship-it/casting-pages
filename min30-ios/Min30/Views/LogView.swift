@@ -86,7 +86,8 @@ struct LogView: View {
     private var slotHeader: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(Fmt.hhmm(editSlot))–\(Fmt.hhmm(editSlot + store.settings.interval))")
+                // 이미 기록된 블록이면 그때의 길이로 표시한다
+                Text("\(Fmt.hhmm(editSlot))–\(Fmt.hhmm(editSlot + editSlotLength))")
                     .font(.system(size: 26, weight: .bold))
                 Text(slotCaption).font(.system(size: 12)).foregroundStyle(.tertiary)
             }
@@ -302,6 +303,10 @@ struct LogView: View {
                 set: { store.settings.quickMode = $0; store.save() })
     }
 
+    private var editSlotLength: Int {
+        store.entry(editDay, editSlot).map { store.minutes(of: $0) } ?? store.settings.interval
+    }
+
     private var slotCaption: String {
         if editDay != store.logicalDay() { return Fmt.pretty(editDay) }
         let now = store.currentSlot()
@@ -391,7 +396,8 @@ struct LogView: View {
             store.addIdea(String(note[range.upperBound...]), fromPing: true)
             msg = "저장 · 아이디어함에도 담았어요"
         }
-        flash(msg)
+        // Never let a failed write pass for a successful one.
+        flash(store.lastSaveFailed ? "저장 실패 — 기기 저장 공간을 확인해 주세요" : msg)
         Task { await Notifier.shared.reschedule() }   // tags changed → refresh buttons
         advanceAfterSave()
     }

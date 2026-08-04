@@ -63,6 +63,10 @@ struct Entry: Codable, Identifiable, Hashable, Sendable {
     var impact: Int = -1     // -1 = 미입력, 0 낮음 / 1 보통 / 2 높음
     var note: String = ""
     var skipped: Bool = false
+    /// 기록 당시의 블록 길이(분). 이걸 저장해 두지 않으면 나중에 간격을 바꿀 때
+    /// 과거 기록이 통째로 다시 환산된다 — 30분으로 쌓은 8블록이 60분으로 바꾸는
+    /// 순간 4시간에서 8시간이 되어 버린다. nil 은 iv 도입 이전 데이터.
+    var iv: Int?
     var createdAt = Date()
     var updatedAt = Date()
 

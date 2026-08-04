@@ -126,30 +126,32 @@ struct ReviewView: View {
         let row: String
     }
 
+    /// Marks come from the blocks themselves, each at its own recorded length,
+    /// so a day logged at a different interval — or before the waking window
+    /// was narrowed — still draws where it actually happened.
     private var bands: [Band] {
         let iv = store.settings.interval
         var out: [Band] = []
-        for slot in store.slots {
-            let e = store.entry(day, slot)
-            let logged = e?.isLogged == true
-            out.append(Band(
-                id: slot,
-                start: slot,
-                end: slot + iv - 2,           // 2분 = 마크 사이 여백
-                // an unlogged block must read as a hole, not blend into the card
-                color: logged ? (e?.category?.color ?? Color.secondary) : Color.secondary.opacity(0.22),
-                row: "활동"
-            ))
-            if e?.impact == 2 {
-                out.append(Band(id: slot + 100_000, start: slot, end: slot + iv - 2,
+
+        for e in store.loggedEntries(day) {
+            let len = store.minutes(of: e)
+            out.append(Band(id: e.slot, start: e.slot, end: e.slot + len - 2,   // 2분 = 마크 사이 여백
+                            color: e.category?.color ?? Color.secondary, row: "활동"))
+            if e.impact == 2 {
+                out.append(Band(id: e.slot + 100_000, start: e.slot, end: e.slot + len - 2,
                                 color: .green, row: "임팩트"))
             }
         }
-        return out
+        // an unlogged block must read as a hole, not blend into the card
+        for slot in store.slots where store.entry(day, slot) == nil {
+            out.append(Band(id: slot + 200_000, start: slot, end: slot + iv - 2,
+                            color: Color.secondary.opacity(0.22), row: "활동"))
+        }
+        return out.sorted { $0.start < $1.start }
     }
 
     private func timelineCard(_ s: Store.DaySummary) -> some View {
-        Card(title: "하루 타임라인", subtitle: "한 칸 = \(store.settings.interval)분") {
+        Card(title: "하루 타임라인", subtitle: "아래 초록선 = 임팩트") {
             Chart(bands) { b in
                 BarMark(
                     xStart: .value("시작", b.start),
@@ -203,11 +205,11 @@ struct ReviewView: View {
     }
 
     private var efPoints: [Point] {
-        let half = store.settings.interval / 2
         var out: [Point] = []
         for e in store.loggedEntries(day) {
-            if e.energy > 0 { out.append(Point(id: "e\(e.slot)", x: e.slot + half, y: e.energy, series: "에너지")) }
-            if e.focus > 0 { out.append(Point(id: "f\(e.slot)", x: e.slot + half, y: e.focus, series: "집중력")) }
+            let mid = e.slot + store.minutes(of: e) / 2   // 블록마다 자기 길이의 중앙
+            if e.energy > 0 { out.append(Point(id: "e\(e.slot)", x: mid, y: e.energy, series: "에너지")) }
+            if e.focus > 0 { out.append(Point(id: "f\(e.slot)", x: mid, y: e.focus, series: "집중력")) }
         }
         return out
     }
@@ -263,14 +265,18 @@ struct ReviewView: View {
         let avg: Double
     }
 
-    private var heatCells: [Cell] {
+    /// Hour labels in *window* order, not alphabetical — a wake window that
+    /// wraps past midnight (14:00–03:00) must not put 00–02 at the far left.
+    private var heatHours: [Int] {
         let sp = store.settings.span
-        let hourFrom = sp.start / 60
-        let hourTo = Int(ceil(Double(sp.end) / 60))
+        return Array((sp.start / 60)..<Int(ceil(Double(sp.end) / 60)))
+    }
+
+    private var heatCells: [Cell] {
         var out: [Cell] = []
         for d in days {
             let logged = store.loggedEntries(d).filter { $0.focus > 0 }
-            for h in hourFrom..<hourTo {
+            for h in heatHours {
                 let inHour = logged.filter { $0.slot / 60 == h }
                 let avg = inHour.isEmpty ? 0
                     : Double(inHour.reduce(0) { $0 + $1.focus }) / Double(inHour.count)
@@ -285,7 +291,7 @@ struct ReviewView: View {
 
     private var heatmapCard: some View {
         let cells = heatCells
-        let hours = Array(Set(cells.map(\.hour))).sorted()
+        let hours = heatHours.map { String(format: "%02d", $0 % 24) }
         let labelled = hours.enumerated().filter { $0.offset % 2 == 0 }.map(\.element)
 
         return Card(title: "시간대별 집중력", subtitle: "진할수록 몰입") {

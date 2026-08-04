@@ -31,6 +31,10 @@ final class Store {
         return dir.appendingPathComponent("min30.json")
     }
 
+    /// Set when the last write failed, so the UI can say so instead of
+    /// silently claiming a save that never landed.
+    private(set) var lastSaveFailed = false
+
     private init() { load() }
 
     func load() {
@@ -40,13 +44,41 @@ final class Store {
         ideas = snap.ideas
         reviews = snap.reviews
         settings = snap.settings
+        stampLegacyIntervals()
+    }
+
+    /// Stamp the block length onto anything recorded before `iv` existed, using
+    /// the interval in force right now — which is the one it was logged at,
+    /// since this runs before the user can change it. Idempotent.
+    private func stampLegacyIntervals() {
+        var touched = false
+        // Snapshot the keys before mutating — iterating a dictionary's own
+        // key view while writing into it is undefined behaviour.
+        for day in Array(entries.keys) {
+            guard var slots = entries[day] else { continue }
+            var changed = false
+            for slot in Array(slots.keys) where slots[slot]?.iv == nil {
+                slots[slot]?.iv = settings.interval
+                changed = true
+            }
+            if changed {
+                entries[day] = slots
+                touched = true
+            }
+        }
+        if touched { save() }
     }
 
     func save() {
         let snap = Snapshot(entries: entries, ideas: ideas, reviews: reviews, settings: settings)
-        queue.async {
-            guard let data = try? JSONEncoder().encode(snap) else { return }
-            try? data.write(to: Self.fileURL, options: .atomic)
+        queue.async { [weak self] in
+            do {
+                let data = try JSONEncoder().encode(snap)
+                try data.write(to: Self.fileURL, options: .atomic)
+                Task { @MainActor in self?.lastSaveFailed = false }
+            } catch {
+                Task { @MainActor in self?.lastSaveFailed = true }
+            }
         }
     }
 
@@ -120,11 +152,15 @@ final class Store {
     func put(day: String, slot: Int, mutate: (inout Entry) -> Void) -> Entry {
         var e = entries[day]?[slot] ?? Entry(day: day, slot: slot)
         mutate(&e)
+        if e.iv == nil { e.iv = settings.interval }   // 기록 당시 길이를 고정
         e.updatedAt = Date()
         entries[day, default: [:]][slot] = e
         save()
         return e
     }
+
+    /// 이 블록이 실제로 몇 분이었나. iv 이전 데이터는 현재 설정으로 대체된다.
+    func minutes(of e: Entry) -> Int { e.iv ?? settings.interval }
 
     func skip(day: String, slot: Int) {
         put(day: day, slot: slot) { $0.skipped = true; $0.activity = "" }
@@ -229,43 +265,54 @@ final class Store {
 
     func hours(blocks: Int) -> Double { Double(blocks * settings.interval) / 60 }
 
+    /// 기간 합계는 언제나 블록들의 실제 길이를 더해서 낸다 — 오늘의 설정으로
+    /// 곱하면 간격을 바꾸는 순간 과거가 통째로 다시 환산된다.
+    func hours(of list: [Entry]) -> Double {
+        Double(list.reduce(0) { $0 + minutes(of: $1) }) / 60
+    }
+
     func summarize(_ days: [String]) -> DaySummary {
         let all = days.flatMap { loggedEntries($0) }
-        var byCat: [Category?: Int] = [:]
-        var eSum = 0, eN = 0, fSum = 0, fN = 0, impact = 0, waste = 0
+        var minsByCat: [Category?: Int] = [:]
+        var nByCat: [Category?: Int] = [:]
+        var eSum = 0, eN = 0, fSum = 0, fN = 0, impactMins = 0, wasteMins = 0, totalMins = 0
         for x in all {
-            byCat[x.category, default: 0] += 1
+            let m = minutes(of: x)
+            minsByCat[x.category, default: 0] += m
+            nByCat[x.category, default: 0] += 1
+            totalMins += m
             if x.energy > 0 { eSum += x.energy; eN += 1 }
             if x.focus > 0 { fSum += x.focus; fN += 1 }
-            if x.impact == 2 { impact += 1 }
-            if x.category == .waste { waste += 1 }
+            if x.impact == 2 { impactMins += m }
+            if x.category == .waste { wasteMins += m }
         }
         let total = all.count
-        var rows: [CategoryRow] = Category.allCases.compactMap { c in
-            let n = byCat[c] ?? 0
+
+        func row(_ c: Category?, _ title: String) -> CategoryRow? {
+            let n = nByCat[c] ?? 0
             guard n > 0 else { return nil }
-            return CategoryRow(category: c, title: c.title, blocks: n,
-                               hours: hours(blocks: n),
-                               pct: total > 0 ? Int((Double(n) / Double(total) * 100).rounded()) : 0)
+            let mins = minsByCat[c] ?? 0
+            return CategoryRow(category: c, title: title, blocks: n,
+                               hours: Double(mins) / 60,
+                               pct: totalMins > 0 ? Int((Double(mins) / Double(totalMins) * 100).rounded()) : 0)
         }
-        if let n = byCat[nil], n > 0 {
-            rows.append(CategoryRow(category: nil, title: "미분류", blocks: n,
-                                    hours: hours(blocks: n),
-                                    pct: total > 0 ? Int((Double(n) / Double(total) * 100).rounded()) : 0))
-        }
-        rows.sort { $0.blocks > $1.blocks }
+        var rows = Category.allCases.compactMap { row($0, $0.title) }
+        if let other = row(nil, "미분류") { rows.append(other) }
+        rows.sort { $0.hours > $1.hours }
 
         let today = logicalDay()
         let nowOff = offset()
-        let possible = days.reduce(0) { acc, day in
+        // 나중에 기상 시간대를 좁히면 창 밖으로 밀려난 블록 때문에 분모가
+        // 분자보다 작아진다. 실제 기록 수 밑으로는 내려가지 않게 한다.
+        let possible = max(total, days.reduce(0) { acc, day in
             acc + slots.filter { day != today || $0 + settings.interval <= nowOff }.count
-        }
+        })
 
         return DaySummary(
             blocks: total,
-            loggedHours: hours(blocks: total),
-            impactHours: hours(blocks: impact),
-            wasteHours: hours(blocks: waste),
+            loggedHours: Double(totalMins) / 60,
+            impactHours: Double(impactMins) / 60,
+            wasteHours: Double(wasteMins) / 60,
             energy: eN > 0 ? Double(eSum) / Double(eN) : 0,
             focus: fN > 0 ? Double(fSum) / Double(fN) : 0,
             coverage: possible > 0 ? Int((Double(total) / Double(possible) * 100).rounded()) : 0,
@@ -276,20 +323,23 @@ final class Store {
 
     /// The run of consecutive blocks with the highest average focus — the
     /// window worth defending for tomorrow's most important work.
-    func bestFocusWindow(_ day: String) -> (from: Int, to: Int, avg: Double)? {
+    func bestFocusWindow(_ day: String) -> (from: Int, to: Int, avg: Double, blocks: Int)? {
         let list = loggedEntries(day).filter { $0.focus > 0 }
         guard list.count >= 2 else { return nil }
-        var best: (from: Int, to: Int, avg: Double)?
+        var best: (from: Int, to: Int, avg: Double, blocks: Int)?
         for i in list.indices {
             var sum = 0, n = 0
             for j in i..<min(i + 4, list.count) {
-                guard list[j].slot == list[i].slot + (j - i) * settings.interval else { break }
+                // 연속 판정도 블록별 실제 길이를 쓴다
+                if j > i, list[j].slot != list[j - 1].slot + minutes(of: list[j - 1]) { break }
                 sum += list[j].focus
                 n += 1
                 if n >= 2 {
                     let avg = Double(sum) / Double(n)
-                    if best == nil || avg > best!.avg {
-                        best = (list[i].slot, list[j].slot + settings.interval, avg)
+                    // 평균이 같으면 더 오래 유지된 구간이 이긴다 — 30분짜리 반짝
+                    // 몰입보다 두 시간 내리 이어진 구간이 내일 지킬 값어치가 있다
+                    if best == nil || avg > best!.avg || (avg == best!.avg && n > best!.blocks) {
+                        best = (list[i].slot, list[j].slot + minutes(of: list[j]), avg, n)
                     }
                 }
             }
@@ -362,7 +412,7 @@ final class Store {
                 guard let e = entries[day]?[slot], e.isLogged else { continue }
                 let impact = e.impact >= 0 && e.impact < 3 ? Scale.impact[e.impact] : ""
                 lines.append([
-                    day, Fmt.hhmm(slot), Fmt.hhmm(slot + settings.interval),
+                    day, Fmt.hhmm(slot), Fmt.hhmm(slot + minutes(of: e)),
                     q(e.activity), e.category?.title ?? "",
                     e.energy > 0 ? String(e.energy) : "",
                     e.focus > 0 ? String(e.focus) : "",
