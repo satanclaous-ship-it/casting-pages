@@ -79,7 +79,12 @@ function load(key, fb) {
 }
 function save(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); return true; }
-  catch (e) { toast('저장 공간이 가득 찼어요. 설정에서 내보내기 후 정리해 주세요.'); return false; }
+  catch {
+    // Never let a failed write pass for a successful one — callers check this
+    // before telling the user anything was saved.
+    toast('저장 실패 — 공간이 가득 찼어요. 설정에서 내보내기 후 정리해 주세요.', 6000);
+    return false;
+  }
 }
 
 const DB = {
@@ -151,14 +156,39 @@ function currentSlot(d = new Date()) {
 const isWeekend = (dk) => [0, 6].includes(keyToDate(dk).getDay());
 
 const getEntry = (dk, off) => (DB.entries[dk] || {})[String(off)] || null;
+
 function putEntry(dk, off, patch) {
   DB.entries[dk] = DB.entries[dk] || {};
   const prev = DB.entries[dk][String(off)] || {};
-  DB.entries[dk][String(off)] = Object.assign({ createdAt: Date.now() }, prev, patch, { updatedAt: Date.now() });
-  saveEntries();
+  DB.entries[dk][String(off)] = Object.assign(
+    { createdAt: Date.now() }, prev, patch,
+    // Stamp the block length at write time. Without this, switching the
+    // interval later silently rescales every past day — 8 blocks logged at
+    // 30 min would read as 8 hours once you moved to 60.
+    { iv: prev.iv || DB.set.interval, updatedAt: Date.now() }
+  );
+  return saveEntries();
 }
+
+/** How long this block actually was. Pre-`iv` data falls back to the setting. */
+const entryMins = (e) => (e && e.iv) || DB.set.interval;
+
+/** Stamp the block length onto anything recorded before `iv` existed, using
+ *  the interval in force right now — which is the one it was logged at, since
+ *  this runs before the user can change it. Idempotent, so it can run on every
+ *  boot; without it, changing the interval would rescale all history. */
+function stampLegacyIntervals() {
+  let touched = false;
+  for (const day of Object.keys(DB.entries)) {
+    for (const e of Object.values(DB.entries[day])) {
+      if (!e.iv) { e.iv = DB.set.interval; touched = true; }
+    }
+  }
+  if (touched) saveEntries();
+}
+
 const dayEntries = (dk) => Object.entries(DB.entries[dk] || {})
-  .map(([off, e]) => Object.assign({ off: Number(off) }, e))
+  .map(([off, e]) => Object.assign({ off: Number(off), iv: entryMins(e) }, e, { iv: entryMins(e) }))
   .filter((e) => !e.skipped && e.act)
   .sort((a, b) => a.off - b.off);
 
@@ -701,8 +731,7 @@ function addIdea(text, source = 'quick') {
     day: logicalDay(now), slot: currentSlot(now), createdAt: Date.now(),
   };
   DB.ideas.unshift(idea);
-  saveIdeas();
-  return idea;
+  return saveIdeas() ? idea : null;
 }
 
 function renderIdeas() {
@@ -743,8 +772,9 @@ function renderIdeas() {
    directly and the whole dashboard re-themes with no redraw. */
 
 const W = 720;
-const hrs = (blocks) => (blocks * DB.set.interval) / 60;
 const fmtH = (h) => (h >= 1 ? `${(Math.round(h * 10) / 10).toFixed(1)}h` : `${Math.round(h * 60)}m`);
+/** Duration always comes from the blocks themselves, never from today's setting. */
+const sumH = (entries) => entries.reduce((a, e) => a + entryMins(e), 0) / 60;
 
 function axisTimeTicks(s, e) {
   // one label every 2h, and never so many that they collide on a phone
@@ -766,29 +796,43 @@ function tickAnchor(x, lo, hi) {
 /** Day timeline — one block per interval, colored by category.
  *  Identity never rides on color alone: legend + hover + table view. */
 function chartDayBand(dk) {
-  const { s, e } = span();
   const iv = DB.set.interval;
-  const all = slotsOf();
+  const logged = dayEntries(dk);
+  const grid = slotsOf().filter((sl) => !getEntry(dk, sl));
+
+  // Marks come from the blocks themselves, each at its own recorded length, so
+  // a day logged at a different interval — or before the waking window was
+  // narrowed — still draws where it actually happened.
+  const marks = logged
+    .map((en) => ({ from: en.off, to: en.off + entryMins(en), en }))
+    .concat(grid.map((sl) => ({ from: sl, to: sl + iv, en: null })))
+    .sort((a, b) => a.from - b.from);
+  if (!marks.length) return '<div class="empty">이 날엔 기록이 없어요</div>';
+
+  // domain covers the waking window *and* anything logged outside it
+  const sp = span();
+  const s = Math.min(sp.s, ...marks.map((m) => m.from));
+  const e = Math.max(sp.e, ...marks.map((m) => m.to));
+
   const H = 92, top = 10, bandH = 46, padL = 4, padR = 4;
   const innerW = W - padL - padR;
-  const px = (m) => padL + ((m - s) / (e - s)) * innerW;
+  const px = (m) => padL + ((m - s) / (e - s || 1)) * innerW;
   const gap = 2;
 
-  let marks = '';
-  for (const sl of all) {
-    const en = getEntry(dk, sl);
-    const x = px(sl), w = Math.max(1, px(sl + iv) - x - gap);
-    const filled = en && !en.skipped && en.act;
+  let out = '';
+  for (const mk of marks) {
+    const x = px(mk.from), w = Math.max(1, px(mk.to) - x - gap);
+    const en = mk.en;
     // an unlogged block has to be *visible* as a hole, not blend into the card
-    const fill = filled ? `var(${CAT[en.cat]?.v || '--text-muted'})` : 'var(--surface-3)';
-    const label = filled
-      ? `${hhmm(sl)}–${hhmm(sl + iv)}|${en.act}|${CAT[en.cat]?.n || '미분류'} · 에너지 ${en.energy || '–'} · 집중 ${en.focus || '–'}${en.impact === 2 ? ' · 임팩트' : ''}`
-      : `${hhmm(sl)}–${hhmm(sl + iv)}|기록 없음|`;
-    marks += `<rect class="hit" x="${x}" y="${top}" width="${w}" height="${bandH}" rx="3"
+    const fill = en ? `var(${CAT[en.cat]?.v || '--text-muted'})` : 'var(--surface-3)';
+    const label = en
+      ? `${hhmm(mk.from)}–${hhmm(mk.to)}|${en.act}|${CAT[en.cat]?.n || '미분류'} · 에너지 ${en.energy || '–'} · 집중 ${en.focus || '–'}${en.impact === 2 ? ' · 임팩트' : ''}`
+      : `${hhmm(mk.from)}–${hhmm(mk.to)}|기록 없음|`;
+    out += `<rect class="hit" x="${x}" y="${top}" width="${w}" height="${bandH}" rx="3"
       fill="${fill}" data-tip="${esc(label)}"></rect>`;
     // impact gets a second, non-color channel
-    if (filled && en.impact === 2) {
-      marks += `<rect x="${x}" y="${top + bandH + 3}" width="${w}" height="3" rx="1.5" fill="var(--good)" pointer-events="none"></rect>`;
+    if (en && en.impact === 2) {
+      out += `<rect x="${x}" y="${top + bandH + 3}" width="${w}" height="3" rx="1.5" fill="var(--good)" pointer-events="none"></rect>`;
     }
   }
 
@@ -798,7 +842,7 @@ function chartDayBand(dk) {
        text-anchor="${tickAnchor(px(m), 0, W)}">${hhmm(m)}</text>`).join('');
 
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="하루 타임라인">
-    ${marks}${ticks}
+    ${out}${ticks}
   </svg>`;
 }
 
@@ -806,7 +850,10 @@ function chartDayBand(dk) {
 function chartEnergyFocus(dk) {
   const list = dayEntries(dk).filter((x) => x.energy || x.focus);
   if (list.length < 2) return `<div class="empty">기록이 2개 이상 쌓이면 그려져요</div>`;
-  const { s, e } = span();
+  // domain covers anything logged outside the current waking window too
+  const sp = span();
+  const s = Math.min(sp.s, ...list.map((x) => x.off));
+  const e = Math.max(sp.e, ...list.map((x) => x.off + entryMins(x)));
   const H = 210, top = 14, bot = 40, padL = 26, padR = 46;
   const plotH = H - top - bot, innerW = W - padL - padR;
   const px = (m) => padL + ((m - s) / (e - s)) * innerW;
@@ -835,7 +882,7 @@ function chartEnergyFocus(dk) {
 
   let paths = '';
   for (const sr of series) {
-    const pts = list.filter((x) => x[sr.key]).map((x) => [px(x.off + DB.set.interval / 2), py(x[sr.key])]);
+    const pts = list.filter((x) => x[sr.key]).map((x) => [px(x.off + entryMins(x) / 2), py(x[sr.key])]);
     if (!pts.length) continue;
     // marks sit above the hit strips, so they must not swallow the pointer
     paths += `<polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" pointer-events="none"
@@ -850,7 +897,7 @@ function chartEnergyFocus(dk) {
   // invisible per-block hit strips — bigger than the 8px dots
   let hits = '';
   for (const x of list) {
-    const cx = px(x.off + DB.set.interval / 2);
+    const cx = px(x.off + entryMins(x) / 2);
     hits += `<rect class="hit" x="${cx - 12}" y="${top}" width="24" height="${plotH}" fill="transparent"
       data-tip="${esc(`${hhmm(x.off)}|${x.act}|에너지 ${x.energy || '–'} · 집중 ${x.focus || '–'}`)}"></rect>`;
   }
@@ -950,29 +997,40 @@ let reviewScope = 'day';
 function summarize(dks) {
   const iv = DB.set.interval;
   const all = dks.flatMap((dk) => dayEntries(dk));
-  const byCat = {};
-  let eSum = 0, eN = 0, fSum = 0, fN = 0, impactBlocks = 0, wasteBlocks = 0;
+  const minsByCat = {};
+  const nByCat = {};
+  let eSum = 0, eN = 0, fSum = 0, fN = 0, impactMins = 0, wasteMins = 0, totalMins = 0;
   for (const x of all) {
+    const m = entryMins(x);
     const k = x.cat || 'other';
-    byCat[k] = (byCat[k] || 0) + 1;
+    minsByCat[k] = (minsByCat[k] || 0) + m;
+    nByCat[k] = (nByCat[k] || 0) + 1;
+    totalMins += m;
     if (x.energy) { eSum += x.energy; eN++; }
     if (x.focus) { fSum += x.focus; fN++; }
-    if (x.impact === 2) impactBlocks++;
-    if (x.cat === 'waste') wasteBlocks++;
+    if (x.impact === 2) impactMins += m;
+    if (x.cat === 'waste') wasteMins += m;
   }
   const total = all.length;
-  const rows = CATS.map((c) => ({ name: c.n, v: c.v, k: c.k, n: byCat[c.k] || 0 }))
-    .concat(byCat.other ? [{ name: '미분류', v: '--text-muted', k: 'other', n: byCat.other }] : [])
+  const rows = CATS.map((c) => ({ name: c.n, v: c.v, k: c.k }))
+    .concat([{ name: '미분류', v: '--text-muted', k: 'other' }])
+    .map((r) => ({ ...r, n: nByCat[r.k] || 0, mins: minsByCat[r.k] || 0 }))
     .filter((r) => r.n > 0)
-    .map((r) => ({ ...r, h: hrs(r.n), pct: total ? Math.round((r.n / total) * 100) : 0 }))
-    .sort((a, b) => b.n - a.n);
-  const possible = dks.reduce((a, dk) => a + slotsOf().filter((s) => {
+    .map((r) => ({ ...r, h: r.mins / 60, pct: totalMins ? Math.round((r.mins / totalMins) * 100) : 0 }))
+    .sort((a, b) => b.mins - a.mins);
+
+  // Blocks logged outside today's waking window still happened — coverage must
+  // never claim more than 100% because the window was narrowed after the fact.
+  const possible = Math.max(total, dks.reduce((a, dk) => a + slotsOf().filter((s) => {
     const isToday = dk === logicalDay();
     return !isToday || s + iv <= offsetOf();
-  }).length, 0);
+  }).length, 0));
+
   return {
     all, rows, total,
-    impactH: hrs(impactBlocks), wasteH: hrs(wasteBlocks),
+    loggedH: totalMins / 60,
+    impactH: impactMins / 60,
+    wasteH: wasteMins / 60,
     energy: eN ? eSum / eN : 0, focus: fN ? fSum / fN : 0,
     coverage: possible ? Math.round((total / possible) * 100) : 0,
     ideas: DB.ideas.filter((i) => dks.includes(i.day)).length,
@@ -986,12 +1044,12 @@ function bestWindow(dk) {
   for (let i = 0; i < list.length; i++) {
     let sum = 0, n = 0;
     for (let j = i; j < list.length && j < i + 4; j++) {
-      if (list[j].off !== list[i].off + (j - i) * DB.set.interval) break;
+      if (j > i && list[j].off !== list[j - 1].off + entryMins(list[j - 1])) break;
       sum += list[j].focus; n++;
       if (n >= 2) {
         const avg = sum / n;
         if (!best || avg > best.avg || (avg === best.avg && n > best.n)) {
-          best = { avg, n, from: list[i].off, to: list[j].off + DB.set.interval };
+          best = { avg, n, from: list[i].off, to: list[j].off + entryMins(list[j]) };
         }
       }
     }
@@ -1029,7 +1087,7 @@ function renderReview() {
     <div class="hero">
       <div class="val">${fmtH(S.impactH)}</div>
       <div class="lbl">임팩트 높은 일에 쓴 시간</div>
-      <div class="delta">전체 기록 ${fmtH(hrs(S.total))} 중 ${S.total ? Math.round((S.impactH / hrs(S.total)) * 100) : 0}%${
+      <div class="delta">전체 기록 ${fmtH(S.loggedH)} 중 ${S.loggedH ? Math.round((S.impactH / S.loggedH) * 100) : 0}%${
         S.wasteH > 0 ? ` · 낭비로 표시한 시간 ${fmtH(S.wasteH)}` : ''
       }</div>
     </div>
@@ -1043,15 +1101,20 @@ function renderReview() {
   </div>`;
 
   if (reviewScope === 'day') {
-    const rows = slotsOf().map((s) => {
+    // union of what's logged and today's grid, so nothing recorded under old
+    // settings falls out of the table view
+    const offs = Array.from(new Set(
+      Object.keys(DB.entries[reviewDay] || {}).map(Number).concat(slotsOf())
+    )).sort((a, b) => a - b);
+    const rows = offs.map((s) => {
       const e = getEntry(reviewDay, s);
-      return [`${hhmm(s)}–${hhmm(s + DB.set.interval)}`,
+      return [`${hhmm(s)}–${hhmm(s + entryMins(e))}`,
         e && !e.skipped && e.act ? e.act : '—',
         e?.cat ? CAT[e.cat].n : '—',
         e?.energy || '–', e?.focus || '–', e?.impact === 2 ? '높음' : e?.impact === 1 ? '보통' : e?.impact === 0 ? '낮음' : '–'];
     });
     html += `<div class="card">
-      <div class="card-head"><h2>하루 타임라인</h2><span class="sub">한 칸 = ${DB.set.interval}분 · 아래 초록선 = 임팩트</span></div>
+      <div class="card-head"><h2>하루 타임라인</h2><span class="sub">아래 초록선 = 임팩트</span></div>
       <div class="chart-wrap">${chartDayBand(reviewDay)}</div>
       ${legend}
       ${tableView('band', ['시간', '활동', '분류', '에너지', '집중', '임팩트'], rows)}
@@ -1082,7 +1145,7 @@ function renderReview() {
   }
 
   html += `<div class="card">
-    <div class="card-head"><h2>분류별 시간</h2><span class="sub">${fmtH(hrs(S.total))} 기록됨</span></div>
+    <div class="card-head"><h2>분류별 시간</h2><span class="sub">${fmtH(S.loggedH)} 기록됨</span></div>
     <div class="chart-wrap">${chartCategories(S.rows)}</div>
     ${tableView('cat', ['분류', '시간', '블록', '비중'], S.rows.map((r) => [r.name, fmtH(r.h), r.n, `${r.pct}%`]))}
   </div>`;
@@ -1167,7 +1230,7 @@ function exportCsv() {
     for (const [off, e] of Object.entries(DB.entries[dk]).sort((a, b) => a[0] - b[0])) {
       if (e.skipped || !e.act) continue;
       const o = Number(off);
-      lines.push([dk, hhmm(o), hhmm(o + DB.set.interval), q(e.act), CAT[e.cat]?.n || '', e.energy || '', e.focus || '',
+      lines.push([dk, hhmm(o), hhmm(o + entryMins(e)), q(e.act), CAT[e.cat]?.n || '', e.energy || '', e.focus || '',
         e.impact === 2 ? '높음' : e.impact === 1 ? '보통' : e.impact === 0 ? '낮음' : '', q(e.note || '')].join(','));
     }
   }
@@ -1180,7 +1243,7 @@ function exportMd() {
   const r = DB.reviews[dk] || {};
   const bw = bestWindow(dk);
   const L = [`# ${dk} 하루 기록`, '',
-    `- 임팩트 시간: **${fmtH(S.impactH)}** / 기록 ${fmtH(hrs(S.total))}`,
+    `- 임팩트 시간: **${fmtH(S.impactH)}** / 기록 ${fmtH(S.loggedH)}`,
     `- 평균 에너지 ${S.energy.toFixed(1)} · 평균 집중력 ${S.focus.toFixed(1)} · 기록률 ${S.coverage}%`,
     bw ? `- 최고 집중 구간: ${hhmm(bw.from)}–${hhmm(bw.to)} (평균 ${bw.avg.toFixed(1)})` : '',
     '', '## 분류별', ...S.rows.map((x) => `- ${x.name}: ${fmtH(x.h)} (${x.pct}%)`),
@@ -1318,10 +1381,11 @@ function wire() {
     if (!draft.act.trim()) {
       return toast(DB.set.mode === 'quick' ? '태그를 하나 골라 주세요' : '무엇을 했는지 한 줄만 적어 주세요');
     }
-    putEntry(editDay, editSlot, {
+    const ok = putEntry(editDay, editSlot, {
       act: draft.act.trim(), cat: draft.cat, energy: draft.energy,
       focus: draft.focus, impact: draft.impact, note: draft.note.trim(), skipped: false,
     });
+    if (!ok) return;                 // save() already said why — don't claim success
     rememberTag(draft.act, draft.cat);
     // a note flagged as an idea also lands in the inbox
     const m = draft.note.match(/^\s*아이디어\s*[:：]\s*([\s\S]+)/);
@@ -1336,7 +1400,7 @@ function wire() {
   });
 
   $('#skipEntry').addEventListener('click', () => {
-    putEntry(editDay, editSlot, { skipped: true, act: '' });
+    if (!putEntry(editDay, editSlot, { skipped: true, act: '' })) return;
     toast('건너뛰었어요');
     const all = slotsOf(); const i = all.indexOf(editSlot);
     loadDraft(editDay, all[Math.min(all.length - 1, i + 1)]);
@@ -1360,10 +1424,10 @@ function wire() {
   $('#repeatSave').addEventListener('click', () => {
     const prev = prevEntry();
     if (!prev) return toast('직전에 기록된 블록이 없어요');
-    putEntry(editDay, editSlot, {
+    if (!putEntry(editDay, editSlot, {
       act: prev.act, cat: prev.cat, energy: prev.energy, focus: prev.focus,
       impact: prev.impact ?? -1, note: '', skipped: false,
-    });
+    })) return;
     toast(`${prev.act} — 그대로 저장했어요`);
     const all = slotsOf(); const i = all.indexOf(editSlot);
     loadDraft(editDay, all[Math.min(all.length - 1, i + 1)]);
@@ -1381,6 +1445,7 @@ function wire() {
     if ($('#ideaSheet').returnValue === 'save') {
       const i = addIdea($('#ideaText').value, 'quick');
       if (i) { toast('아이디어함에 담았어요'); if (currentView === 'ideas') renderIdeas(); }
+      // addIdea returns null on a failed write; save() has already explained
     }
   });
   $('#ideaFilters').addEventListener('click', (e) => {
@@ -1400,7 +1465,7 @@ function wire() {
       idea.status = btn.dataset.to;
       toast(`${IDEA_STATUS.find((s) => s.k === idea.status).n}(으)로 옮겼어요`);
     } else return;
-    saveIdeas(); after();
+    saveIdeas(); after(card);
   });
   triage($('#ideaList'), renderIdeas);
 
@@ -1422,7 +1487,18 @@ function wire() {
     DB.reviews[reviewDay][f.dataset.rev] = f.value;
     saveReviews();
   });
-  triage($('#reviewBody'), renderReview);
+  // Triaging must not blow away the review — you're usually mid-sentence in the
+  // retro fields when you do it, and a full re-render steals the caret.
+  triage($('#reviewBody'), (card) => {
+    const box = card.closest('.card');
+    card.remove();
+    const left = box ? box.querySelectorAll('.idea').length : 0;
+    const sub = box?.querySelector('.card-head .sub');
+    if (sub) sub.textContent = `${left}개 대기`;
+    if (box && left === 0 && !box.querySelector('.empty')) {
+      box.insertAdjacentHTML('beforeend', '<div class="empty">정리할 아이디어가 없어요</div>');
+    }
+  });
   wireTips($('#reviewBody'));   // delegated once — survives every re-render
 
   /* ── settings ── */
@@ -1526,6 +1602,7 @@ function wire() {
 
 function boot() {
   document.documentElement.dataset.theme = DB.set.theme || 'dark';
+  stampLegacyIntervals();   // must run before any duration is displayed
   wire();
   updateClock();
 
