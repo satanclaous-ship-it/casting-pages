@@ -16,14 +16,11 @@ struct LogView: View {
     @State private var editSlot = Store.shared.currentSlot()
 
     @State private var activity = ""
-    @State private var category: Category = .maintain
-    @State private var categoryTouched = false     // 사용자가 직접 고쳤나
     @State private var energy = 0
     @State private var focus = 0
     @State private var note = ""
 
     @State private var showRecent = false
-    @State private var showPicker = false
     @State private var showNote = false
     @State private var editingOneThing = false
     @State private var oneThingDraft = ""
@@ -59,7 +56,6 @@ struct LogView: View {
                 router.pendingSlot = nil
             }
         }
-        .sheet(isPresented: $showPicker) { categorySheet }
     }
 
     // MARK: 밀린 블록
@@ -100,14 +96,9 @@ struct LogView: View {
                     .focused($activityFocused)
                     .submitLabel(.next)
                     .onSubmit { advance() }
-                    .onChange(of: activity) { _, new in
-                        // 고쳐준 적이 없으면 계속 자동으로 따라간다
-                        if !categoryTouched { category = store.autoClassify(new, day: editDay) }
-                    }
                 MicButton(dictation: dictation, large: true, seed: { activity }) { activity = $0 }
             }
 
-            classificationRow
             recentToggle
 
             Button(action: advance) {
@@ -126,35 +117,6 @@ struct LogView: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity)
         }
-    }
-
-    /// 분류는 결과만 한 줄로 보여준다. 목록을 늘 펼쳐 둘 이유가 없다.
-    private var classificationRow: some View {
-        Button {
-            showPicker = true
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: category.symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(category.color)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(category.title).font(.system(size: 14, weight: .medium))
-                    Text(categoryTouched ? "직접 고름" : "자동 분류 · 탭해서 변경")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(category.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(category.color.opacity(0.5), lineWidth: 1))
-            .foregroundStyle(Color.primary)
-        }
-        .buttonStyle(.plain)
     }
 
     /// 최근 것들은 접어 둔다 — 필요할 때만 편다.
@@ -179,8 +141,6 @@ struct LogView: View {
                         ForEach(recent, id: \.name) { r in
                             Button {
                                 activity = r.name
-                                category = r.category ?? store.autoClassify(r.name, day: editDay)
-                                categoryTouched = false
                                 activityFocused = false
                             } label: {
                                 HStack(spacing: 6) {
@@ -221,16 +181,11 @@ struct LogView: View {
                     .font(.system(size: 13)).monospacedDigit().foregroundStyle(.tertiary)
             }
 
-            HStack(spacing: 9) {
-                Image(systemName: category.symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(category.color)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(activity).font(.system(size: 18, weight: .semibold)).lineLimit(2)
-                    Text(category.title).font(.system(size: 12)).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
+            // 분류는 여기서 안 묻는다. 저녁 리뷰에서 하루치를 한 번에 본다.
+            Text(activity)
+                .font(.system(size: 18, weight: .semibold))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 8) {
                 FieldLabel(text: "에너지")
@@ -284,7 +239,6 @@ struct LogView: View {
                     Button("저장") {
                         store.setOneThing(oneThingDraft, for: editDay)
                         editingOneThing = false
-                        if !categoryTouched { category = store.autoClassify(activity, day: editDay) }
                     }
                     .buttonStyle(.borderedProminent).controlSize(.small)
                 }
@@ -305,48 +259,6 @@ struct LogView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    // MARK: 분류 시트
-
-    private var categorySheet: some View {
-        NavigationStack {
-            List {
-                ForEach(Category.allCases) { c in
-                    Button {
-                        if c != category {
-                            category = c
-                            categoryTouched = true
-                            store.learnCorrection(activity, c)
-                        }
-                        showPicker = false
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: c.symbol)
-                                .frame(width: 22)
-                                .foregroundStyle(c.color)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(c.title).font(.system(size: 15, weight: .medium))
-                                Text(c.blurb).font(.system(size: 12)).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if c == category {
-                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                            }
-                        }
-                        .foregroundStyle(Color.primary)
-                    }
-                }
-            }
-            .navigationTitle("분류")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("닫기") { showPicker = false }
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 
     // MARK: 오늘 타임라인
@@ -465,13 +377,6 @@ struct LogView: View {
         activity = e?.activity ?? ""
         note = e?.note ?? ""
         showNote = !(e?.note ?? "").isEmpty
-        if let saved = e?.category {
-            category = saved
-            categoryTouched = true
-        } else {
-            category = store.autoClassify(activity, day: day)
-            categoryTouched = false
-        }
         if let e {
             energy = e.energy
             focus = e.focus
@@ -489,7 +394,7 @@ struct LogView: View {
             return activity.trimmingCharacters(in: .whitespaces).isEmpty
                 && note.trimmingCharacters(in: .whitespaces).isEmpty
         }
-        return activity == e.activity && note == e.note && category == e.category
+        return activity == e.activity && note == e.note
             && energy == e.energy && focus == e.focus
     }
 
@@ -521,14 +426,22 @@ struct LogView: View {
     private func saveEntry() {
         let act = activity.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !act.isEmpty else { return }
+        let existing = store.entry(editDay, editSlot)
+        // 분류는 제안만 넣어 두고 확정하지 않는다. 저녁 리뷰에서 하루치를 한 번에
+        // 확인한다 — 30분마다 분류를 결정하게 하면 기록 자체를 안 하게 된다.
+        let suggested = store.autoClassify(act, day: editDay)
         store.put(day: editDay, slot: editSlot) {
             $0.activity = act
-            $0.category = category
             $0.energy = energy
             $0.focus = focus
-            $0.impact = category.legacyImpact
             $0.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
             $0.skipped = false
+            // 이미 리뷰에서 확정한 블록을 고치는 중이면 그 분류를 존중한다
+            if existing?.categoryConfirmed != true {
+                $0.category = suggested
+                $0.categoryConfirmed = false
+                $0.impact = suggested.legacyImpact
+            }
         }
 
         var msg = "저장됐어요"

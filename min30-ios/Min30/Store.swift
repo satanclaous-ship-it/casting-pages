@@ -216,6 +216,36 @@ final class Store {
         return nil
     }
 
+    // MARK: 저녁에 한 번에 분류하기
+
+    /// 아직 사람이 확인하지 않은 블록들. 저녁 리뷰에서 이걸 한 번에 훑는다.
+    func unconfirmed(_ day: String) -> [Entry] {
+        loggedEntries(day).filter { !$0.categoryConfirmed }
+    }
+
+    /// 리뷰에서 분류를 확정한다. 제안과 다르면 그 표현을 기억해 다음부터 맞춘다.
+    func confirmCategory(day: String, slot: Int, as category: Category) {
+        guard let e = entry(day, slot) else { return }
+        if e.category != category { learnCorrection(e.activity, category) }
+        put(day: day, slot: slot) {
+            $0.category = category
+            $0.categoryConfirmed = true
+            $0.impact = category.legacyImpact
+        }
+    }
+
+    /// 제안이 다 맞을 때. 하루치를 한 번에 넘긴다.
+    func confirmAllSuggestions(_ day: String) {
+        for e in unconfirmed(day) {
+            let c = e.category ?? autoClassify(e.activity, day: day)
+            put(day: day, slot: e.slot) {
+                $0.category = c
+                $0.categoryConfirmed = true
+                $0.impact = c.legacyImpact
+            }
+        }
+    }
+
     /// 자동 분류를 고쳤을 때만 부른다. 다음부터 같은 표현은 바로 맞춘다.
     func learnCorrection(_ text: String, _ category: Category) {
         let n = AutoTag.norm(text)

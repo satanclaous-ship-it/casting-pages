@@ -161,8 +161,12 @@ for dev in d.get("result", {}).get("devices", []):
         continue
     props = dev.get("deviceProperties", {})
     conn  = dev.get("connectionProperties", {})
-    udid  = dev.get("identifier", "")
-    if not udid:
+    # devicectl 의 identifier 는 CoreDevice UUID 이고, xcodebuild -destination
+    # id= 는 하드웨어 UDID 를 원한다. 형식이 달라서 섞으면 "Unable to find a
+    # device matching the provided destination specifier" 로 죽는다.
+    ident = dev.get("identifier", "")
+    udid  = hw.get("udid") or ident
+    if not ident:
         continue
     transport = conn.get("transportType", "")          # wired | localNetwork
     tunnel    = conn.get("tunnelState", "")            # connected | connecting | unavailable
@@ -172,13 +176,13 @@ for dev in d.get("result", {}).get("devices", []):
         0 if tunnel == "connected" else 1 if tunnel == "connecting" else 2,
         0 if transport == "wired" else 1,
     )
-    cands.append((score, udid, props.get("name", "iPhone"), transport, tunnel, paired))
+    cands.append((score, udid, ident, props.get("name", "iPhone"), transport, tunnel, paired))
 
 if not cands:
     sys.exit(0)
 cands.sort()
-_, udid, name, transport, tunnel, paired = cands[0]
-print("\t".join([udid, name, transport, tunnel, paired]))
+_, udid, ident, name, transport, tunnel, paired = cands[0]
+print("\t".join([udid, ident, name, transport, tunnel, paired]))
 PY
 )"
     [[ -n "$FOUND" ]] && break
@@ -186,10 +190,11 @@ PY
   done
   rm -f "$DEV_JSON"
 
-  UDID="$(cut -f1 <<<"$FOUND")"
-  DEV_NAME="$(cut -f2 <<<"$FOUND")"
-  DEV_TRANSPORT="$(cut -f3 <<<"$FOUND")"
-  DEV_TUNNEL="$(cut -f4 <<<"$FOUND")"
+  UDID="$(cut -f1 <<<"$FOUND")"            # xcodebuild -destination 용 하드웨어 UDID
+  DEV_ID="$(cut -f2 <<<"$FOUND")"          # devicectl --device 용 CoreDevice UUID
+  DEV_NAME="$(cut -f3 <<<"$FOUND")"
+  DEV_TRANSPORT="$(cut -f4 <<<"$FOUND")"
+  DEV_TUNNEL="$(cut -f5 <<<"$FOUND")"
 
   # 서명에 쓸 팀 ID 를 키체인의 개발자 인증서에서 뽑는다
   TEAM="$(security find-identity -v -p codesigning 2>/dev/null \
@@ -239,8 +244,9 @@ PY
     then
       APP="$(find ./.dd/Build/Products -maxdepth 2 -name 'Min30.app' -type d 2>/dev/null | head -1)"
       info "설치 중…"
+      # 여기는 devicectl 이라 CoreDevice UUID 를 쓴다 (xcodebuild 와 다른 ID)
       if [[ -n "$APP" ]] && xcrun devicectl device install app \
-           --device "$UDID" "$APP" > install.log 2>&1; then
+           --device "${DEV_ID:-$UDID}" "$APP" > install.log 2>&1; then
         bold $'\n🎉 폰에 설치했어요'
         ok "홈 화면에서 '30분 기록' 을 열어 보세요"
         info "처음이면: 설정 → 일반 → VPN 및 기기 관리 → 본인 Apple ID → 신뢰"

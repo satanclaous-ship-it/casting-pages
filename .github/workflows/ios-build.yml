@@ -33,6 +33,9 @@ jobs:
           sudo apt-get install -y shellcheck >/dev/null 2>&1 || true
           # 스타일이 아니라 진짜 오류만 본다
           shellcheck -S error min30-ios/setup-mac.sh && echo "✓ shellcheck OK"
+      - name: 자동 분류 키워드 회귀 검사
+        run: python3 min30-ios/Tests/classify_test.py
+
       - name: 스크립트 안의 파이썬 조각 문법 검사
         run: |
           python3 - <<'EOF'

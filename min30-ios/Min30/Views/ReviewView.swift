@@ -20,6 +20,7 @@ struct ReviewView: View {
                 if s.blocks == 0 {
                     emptyCard
                 } else {
+                    if !weekScope { classifyCard }
                     heroCard(s)
                     tiles(s)
                     if weekScope {
@@ -84,6 +85,64 @@ struct ReviewView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
+        }
+    }
+
+    // MARK: 하루치 분류 — 낮에 미뤄둔 결정을 여기서 한 번에
+
+    /// 30분마다 "이게 무슨 분류지?" 를 묻지 않는 대신, 저녁에 하루를 통째로
+    /// 놓고 훑는다. 하루 전체가 보일 때라야 무엇이 진짜 레버리지였는지
+    /// 판단할 수 있고, 결정 한 번의 비용도 그만큼 싸다.
+    @ViewBuilder private var classifyCard: some View {
+        let pending = store.unconfirmed(day)
+        if !pending.isEmpty {
+            Card(title: "분류하기", subtitle: "\(pending.count)개 남음") {
+                Text("낮에는 기록만 했어요. 제안이 맞으면 그대로 넘기고, 아니면 탭해서 바꾸세요.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+
+                ForEach(pending) { e in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Text(Fmt.hhmm(e.slot))
+                                .font(.system(size: 12)).monospacedDigit()
+                                .foregroundStyle(.tertiary)
+                                .frame(width: 44, alignment: .leading)
+                            Text(e.activity).font(.system(size: 14)).lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        FlowLayout(spacing: 6) {
+                            ForEach(Category.allCases) { c in
+                                let isSuggested = e.category == c
+                                Button {
+                                    store.confirmCategory(day: day, slot: e.slot, as: c)
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: c.symbol).font(.system(size: 10))
+                                        Text(c.title).font(.system(size: 12.5))
+                                    }
+                                    .padding(.horizontal, 10).padding(.vertical, 7)
+                                    .background(isSuggested ? c.color.opacity(0.18) : Color(.secondarySystemBackground),
+                                                in: Capsule())
+                                    .overlay(Capsule().strokeBorder(isSuggested ? c.color : .clear, lineWidth: 1))
+                                    .foregroundStyle(isSuggested ? c.color : Color.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    Divider()
+                }
+
+                Button {
+                    store.confirmAllSuggestions(day)
+                } label: {
+                    Text("제안대로 \(pending.count)개 전부 확인")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
         }
     }
 
