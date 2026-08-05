@@ -121,46 +121,86 @@ if [[ $BUILD_RC -eq 0 ]]; then
   # ── 연결된 아이폰이 있으면 실제로 설치까지 한다 ──────────────
   bold $'\n▶ 5/5  아이폰에 설치'
 
+  # 무선 기기는 발견되는 데 몇 초 걸린다. 케이블이면 첫 시도에 바로 잡힌다.
   DEV_JSON="$(mktemp)"
-  xcrun devicectl list devices --json-output "$DEV_JSON" >/dev/null 2>&1 || true
-  UDID="$(python3 - "$DEV_JSON" <<'PY' 2>/dev/null || true
+  FOUND=""
+  for attempt in 1 2 3; do
+    xcrun devicectl list devices --timeout 15 --json-output "$DEV_JSON" >/dev/null 2>&1 || true
+    FOUND="$(python3 - "$DEV_JSON" <<'PY' 2>/dev/null || true
 import json, sys
+
 try:
     d = json.load(open(sys.argv[1]))
 except Exception:
     sys.exit(0)
+
+cands = []
 for dev in d.get("result", {}).get("devices", []):
+    hw   = dev.get("hardwareProperties", {})
+    if hw.get("platform") not in ("iOS", "iPadOS"):
+        continue
     props = dev.get("deviceProperties", {})
     conn  = dev.get("connectionProperties", {})
-    hw    = dev.get("hardwareProperties", {})
-    if hw.get("platform") != "iOS":
+    udid  = dev.get("identifier", "")
+    if not udid:
         continue
-    if conn.get("tunnelState") == "unavailable":
-        continue
-    print(dev.get("identifier", ""))
-    print(props.get("name", "iPhone"))
-    break
+    transport = conn.get("transportType", "")          # wired | localNetwork
+    tunnel    = conn.get("tunnelState", "")            # connected | connecting | unavailable
+    paired    = conn.get("pairingState", "")           # paired | ...
+    # 연결이 살아 있는 것 우선, 그다음 유선, 그다음 무선.
+    score = (
+        0 if tunnel == "connected" else 1 if tunnel == "connecting" else 2,
+        0 if transport == "wired" else 1,
+    )
+    cands.append((score, udid, props.get("name", "iPhone"), transport, tunnel, paired))
+
+if not cands:
+    sys.exit(0)
+cands.sort()
+_, udid, name, transport, tunnel, paired = cands[0]
+print("\t".join([udid, name, transport, tunnel, paired]))
 PY
 )"
-  DEV_NAME="$(sed -n 2p <<<"$UDID")"
-  UDID="$(sed -n 1p <<<"$UDID")"
+    [[ -n "$FOUND" ]] && break
+    [[ $attempt -lt 3 ]] && { info "기기를 찾는 중… ($attempt/3)"; sleep 4; }
+  done
   rm -f "$DEV_JSON"
+
+  UDID="$(cut -f1 <<<"$FOUND")"
+  DEV_NAME="$(cut -f2 <<<"$FOUND")"
+  DEV_TRANSPORT="$(cut -f3 <<<"$FOUND")"
+  DEV_TUNNEL="$(cut -f4 <<<"$FOUND")"
 
   # 서명에 쓸 팀 ID 를 키체인의 개발자 인증서에서 뽑는다
   TEAM="$(security find-identity -v -p codesigning 2>/dev/null \
           | grep -o '(\([A-Z0-9]\{10\}\))' | head -1 | tr -d '()')"
 
   if [[ -z "$UDID" ]]; then
-    bad "연결된 아이폰을 못 찾았어요."
-    info "케이블로 연결하고 화면 잠금을 풀어 주세요. 그다음 이 명령을 다시 돌리거나,"
-    info "Xcode 에서 기기를 고르고 ⌘R 을 누르면 됩니다."
+    bad "아이폰을 못 찾았어요."
+    echo
+    info "무선으로 쓰려면 한 번만 준비가 필요해요 (케이블이 필요한 유일한 순간):"
+    info "  1. 아이폰을 케이블로 연결"
+    info "  2. Xcode → Window → Devices and Simulators (⇧⌘2)"
+    info "  3. 왼쪽에서 기기 선택 → 'Connect via network' 체크"
+    info "  4. 케이블 뽑기. 이후로는 같은 와이파이면 무선으로 잡혀요."
+    echo
+    info "이미 해뒀다면: 아이폰 잠금을 풀고 화면을 켠 채로 다시 돌려 주세요."
+    info "(잠긴 기기는 무선으로 응답하지 않아요)"
   elif [[ -z "$TEAM" ]]; then
     bad "개발자 서명 인증서를 못 찾았어요 (첫 설치라면 정상)."
     info "Xcode 에서 한 번만 설정해 주세요:"
     info "  왼쪽 Min30 클릭 → Signing & Capabilities → Team 을 본인 Apple ID 로"
     info "  그다음 ⌘R. 한 번 해두면 이후로는 이 스크립트가 알아서 설치해요."
   else
-    info "기기: ${DEV_NAME:-iPhone}  ·  팀: $TEAM"
+    case "$DEV_TRANSPORT" in
+      wired)        LINK="케이블" ;;
+      localNetwork) LINK="와이파이" ;;
+      *)            LINK="$DEV_TRANSPORT" ;;
+    esac
+    info "기기: ${DEV_NAME:-iPhone}  ·  연결: $LINK  ·  팀: $TEAM"
+    if [[ "$DEV_TRANSPORT" == "localNetwork" ]]; then
+      info "무선이라 설치가 조금 느려요. 아이폰 잠금을 풀어 두세요."
+    fi
     info "서명해서 빌드 중…"
     if xcodebuild \
         -project Min30.xcodeproj \
@@ -173,14 +213,20 @@ PY
         build > device-build.log 2>&1
     then
       APP="$(find ./.dd/Build/Products -maxdepth 2 -name 'Min30.app' -type d 2>/dev/null | head -1)"
-      if [[ -n "$APP" ]] && xcrun devicectl device install app --device "$UDID" "$APP" >/dev/null 2>&1; then
+      info "설치 중…"
+      if [[ -n "$APP" ]] && xcrun devicectl device install app \
+           --device "$UDID" "$APP" > install.log 2>&1; then
         bold $'\n🎉 폰에 설치했어요'
         ok "홈 화면에서 '30분 기록' 을 열어 보세요"
         info "처음이면: 설정 → 일반 → VPN 및 기기 관리 → 본인 Apple ID → 신뢰"
       else
         bad "빌드는 됐는데 설치가 안 됐어요."
-        info "Xcode 에서 기기를 고르고 ⌘R 을 눌러 주세요."
-        info "로그: $PROJ_DIR/device-build.log"
+        grep -iE "error|denied|locked|unavailable|timed out" install.log 2>/dev/null | head -6
+        if [[ "$DEV_TRANSPORT" == "localNetwork" ]]; then
+          info "무선이면 흔한 원인: 아이폰이 잠겨 있거나, 절전 모드이거나,"
+          info "맥과 다른 와이파이에 있는 경우예요. 잠금 풀고 다시 돌려 보세요."
+        fi
+        info "안 되면 Xcode 에서 기기를 고르고 ⌘R. 로그: $PROJ_DIR/install.log"
       fi
     else
       bad "기기용 빌드 실패 — 보통 서명 설정이 아직 없어서예요."

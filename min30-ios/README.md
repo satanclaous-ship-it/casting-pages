@@ -32,13 +32,26 @@
 curl -fsSL https://raw.githubusercontent.com/satanclaous-ship-it/casting-pages/claude/30min-activity-tracker-5z988y/min30-ios/setup-mac.sh | bash
 ```
 
-- **성공하면** Xcode가 자동으로 열립니다. `Signing & Capabilities`에서 Team만
-  본인 계정으로 고르면 실기기에 올라갑니다.
+- **성공하면** 연결된(또는 같은 와이파이의) 아이폰에 바로 설치됩니다.
+- **첫 한 번만** Xcode에서 `Signing & Capabilities` → `Team`을 본인 Apple ID로
+  골라 주세요. 인증서가 키체인에 생기면 이후로는 스크립트가 알아서 서명합니다.
 - **에러가 나면** 에러만 추려서 화면에 보여주고 **클립보드에 복사해 둡니다.**
   그대로 Claude에게 붙여넣으면 고쳐서 다시 올려드립니다. 그 다음 위 명령을
   한 번 더 돌리면 됩니다.
 
-아무것도 자동으로 설치하지 않습니다. 필요하면 물어봅니다.
+### 케이블 없이 (무선 설치)
+
+한 번만 준비하면 이후로는 같은 와이파이에 있기만 하면 됩니다.
+
+1. 아이폰을 **케이블로** 연결
+2. Xcode → `Window` → `Devices and Simulators` (⇧⌘2)
+3. 왼쪽에서 기기 선택 → **`Connect via network`** 체크
+4. 케이블 제거
+
+이후 위 명령을 돌리면 무선으로 잡아서 설치합니다. 아이폰 **잠금은 풀어** 두세요 —
+잠긴 기기는 무선으로 응답하지 않습니다. 유선과 무선이 둘 다 잡히면 유선을 씁니다.
+
+XcodeGen 외에는 아무것도 자동으로 설치하지 않습니다. 그것도 물어보고 진행합니다.
 
 ## 직접 열기
 
