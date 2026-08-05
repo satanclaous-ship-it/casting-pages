@@ -23,7 +23,24 @@
 
 ---
 
-## 열기
+## 맥북에서 시작하기 — 한 줄
+
+터미널에 이거 하나만 붙여넣으세요. 소스를 받고, 프로젝트를 확인하고, 실제로
+빌드까지 돌린 뒤 결과를 알려줍니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/satanclaous-ship-it/casting-pages/claude/30min-activity-tracker-5z988y/min30-ios/setup-mac.sh | bash
+```
+
+- **성공하면** Xcode가 자동으로 열립니다. `Signing & Capabilities`에서 Team만
+  본인 계정으로 고르면 실기기에 올라갑니다.
+- **에러가 나면** 에러만 추려서 화면에 보여주고 **클립보드에 복사해 둡니다.**
+  그대로 Claude에게 붙여넣으면 고쳐서 다시 올려드립니다. 그 다음 위 명령을
+  한 번 더 돌리면 됩니다.
+
+아무것도 자동으로 설치하지 않습니다. 필요하면 물어봅니다.
+
+## 직접 열기
 
 ```bash
 open min30-ios/Min30.xcodeproj
