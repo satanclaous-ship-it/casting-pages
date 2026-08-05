@@ -25,37 +25,42 @@ Xcode로 빌드합니다 (`.github/workflows/ios-build.yml`). 에러가 나면 e
 
 즉 **컴파일은 CI가, 로직은 대조가** 지킵니다.
 
-### 실기기 동작 — 여기는 로그로 봅니다
+### 실기기 동작 — 여기는 흔적으로 봅니다
 
 컴파일과 로직은 위에서 지키지만, **실기기에서 실제로 어떻게 도는지는 확인할 수
-없습니다** (작성 환경에 아이폰이 없습니다). 그래서 앱이 굳었을 때 어디까지 갔는지
-`os_log` 로 남깁니다. 맥에서:
+없습니다** (작성 환경에 아이폰이 없습니다). 그래서 앱이 죽거나 굳었을 때 어디까지
+갔는지 두 군데에 남깁니다.
+
+**1. 앱 안 — 맥이 필요 없습니다.**
+앱이 꺼졌다면 다시 열고 `설정 → 마지막 흔적`. 죽기 직전까지 지나간 자리가 그대로
+남아 있습니다. 크래시는 메모리를 가져가지만 이미 디스크에 쓴 것은 못 가져갑니다.
+
+**2. 맥 콘솔 — 실시간으로 보고 싶을 때.**
 
 ```bash
 log stream --predicate 'subsystem == "com.satanclaous.min30"' --style compact
 ```
 
-이 상태로 알림 배너를 누르면 이렇게 찍힙니다:
+어느 쪽이든 이렇게 찍힙니다:
 
 ```
-▶︎ didReceive action=com.apple.UNNotificationDefaultActionIdentifier
-┌ didReceive.main
-└ didReceive.main 1.2ms
-▶︎ scenePhase=active
-┌ pendingSlot→seat(600)
-└ pendingSlot→seat(600) 0.4ms
-▶︎ reschedule 시작
-▶︎ reschedule 끝
+09:14:02.113  ▶︎ didReceive action=com.apple.UNNotificationDefaultActionIdentifier
+09:14:02.114  ┌ didReceive.main
+09:14:02.115  └ didReceive.main 1.2ms
+09:14:02.402  ▶︎ scenePhase=active
+09:14:02.410  ┌ pendingSlot→seat(600)
+09:14:02.411  └ pendingSlot→seat(600) 0.4ms
 ```
 
 읽는 법은 두 가지뿐입니다.
 
-- **`┌` 에 짝이 되는 `└` 가 없다** → 거기서 메인 스레드가 막혔습니다.
+- **`┌` 에 짝이 되는 `└` 가 없다** → 거기서 막혔거나 거기서 죽었습니다.
 - **`↻ ... ×200, ×400, ×600` 이 쏟아진다** → 뷰 갱신이 무한히 돌고 있습니다.
   화면이 굳는 건 같지만 원인도 고치는 법도 완전히 다릅니다.
 
-`os_log` 는 잠금 없는 링버퍼에 쓰기 때문에 메인 스레드를 붙잡지 않습니다.
-그래서 진단이 끝나도 그냥 둡니다.
+`앱 시작` 줄 **바로 앞**이 지난번에 죽은 자리입니다.
+
+os_log 는 잠금 없는 링버퍼고 파일 쪽도 수백 바이트라, 진단이 끝나도 그냥 둡니다.
 
 ---
 
@@ -166,7 +171,7 @@ Min30/
   Diag.swift          멈춘 지점을 찾기 위한 os_log 흔적
   Views/
     Components.swift  척도·카드·범례
-    LogView.swift     2단계 입력 (무엇을 했나 → 에너지·집중력)
+    LogView.swift     2단계 입력 (무엇을 했나 → 집중력)
     IdeasView.swift   수집함 → 콘텐츠감/아이디어뱅크/창고
     ReviewView.swift  하루치 분류 + Swift Charts 대시보드
     SettingsView.swift
@@ -183,7 +188,7 @@ Min30/
 하루에 해야 할 일이 두 가지뿐이도록 설계돼 있습니다.
 
 **낮 — 30분마다 기록만.**
-무엇을 했나 → `다음` → 에너지·집중력 → 저장. **분류는 묻지 않습니다.**
+무엇을 했나 → `다음` → 집중력 → 저장. **분류는 묻지 않습니다.**
 자동 분류가 제안으로만 조용히 들어가고 "미확인" 으로 남습니다.
 
 **저녁 — 리뷰에서 한 번에 분류.**

@@ -8,6 +8,9 @@ struct Min30App: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // 흔적의 첫 줄. 여기서부터 다시 시작했다는 뜻이므로, 이 줄 바로 앞이
+        // 지난번에 앱이 죽은 자리다.
+        Diag.mark("앱 시작")
         Notifier.shared.bootstrap()
     }
 
@@ -118,8 +121,7 @@ struct LogBlockIntent: AppIntent {
             $0.activity = activity
             $0.category = cat
             $0.impact = cat.legacyImpact
-            $0.energy = prev?.energy ?? 0
-            $0.focus = prev?.focus ?? 0
+            $0.focus = prev?.level ?? 0
             $0.skipped = false
         }
         return .result(dialog: "\(Fmt.hhmm(slot)) 블록에 \(cat.title)으로 기록했어요.")

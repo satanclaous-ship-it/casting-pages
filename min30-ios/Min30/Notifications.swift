@@ -255,8 +255,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                     store.put(day: day, slot: target) {
                         $0.activity = prev.activity
                         $0.category = prev.category
-                        $0.energy = prev.energy
-                        $0.focus = prev.focus
+                        $0.focus = prev.level
                         $0.impact = prev.impact
                         $0.skipped = false
                     }
@@ -274,10 +273,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                     $0.activity = name
                     $0.category = cat
                     $0.impact = cat.legacyImpact
-                    // energy/focus barely move in 30 minutes — carry them, and
-                    // the review screen flags anything left unset
-                    $0.energy = prev?.energy ?? 0
-                    $0.focus = prev?.focus ?? 0
+                    // 집중력은 30분 사이에 거의 안 바뀐다 — 직전 값을 이어받고,
+                    // 비어 있는 건 리뷰 화면이 표시한다
+                    $0.focus = prev?.level ?? 0
                     $0.skipped = false
                 }
 

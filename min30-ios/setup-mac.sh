@@ -284,9 +284,11 @@ PY
   info "Xcode 로 열기:  open $PROJ_DIR/Min30.xcodeproj"
 
   echo
-  bold "앱이 멈추면 — 어디서 멈췄는지 보는 법"
-  echo "  아래를 새 터미널에 붙여넣고, 그 상태로 알림 배너를 눌러 보세요."
-  echo "  마지막에 찍힌 줄이 곧 멈춘 지점입니다. 그대로 복사해 Claude 에게 주세요."
+  bold "앱이 멈추거나 꺼지면 — 어디서 그랬는지 보는 법"
+  echo "  가장 쉬운 길: 앱을 다시 열고  설정 → 마지막 흔적  을 통째로 복사."
+  echo "  (죽기 직전까지 지나간 자리가 앱 안에 남습니다. 맥이 없어도 됩니다.)"
+  echo
+  echo "  실시간으로 보고 싶으면 아래를 새 터미널에 붙여넣고 배너를 눌러 보세요."
   echo
   echo "    log stream --predicate 'subsystem == \"com.satanclaous.min30\"' --style compact"
   echo

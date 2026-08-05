@@ -16,8 +16,7 @@ struct LogView: View {
     @State private var editSlot = Store.shared.currentSlot()
 
     @State private var activity = ""
-    @State private var energy = 0
-    @State private var focus = 0
+    @State private var level = 0
     @State private var note = ""
 
     @State private var showRecent = false
@@ -194,12 +193,8 @@ struct LogView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 8) {
-                FieldLabel(text: "에너지")
-                ScalePicker(labels: Scale.energy, value: $energy)
-            }
-            VStack(alignment: .leading, spacing: 8) {
                 FieldLabel(text: "집중력")
-                ScalePicker(labels: Scale.focus, value: $focus)
+                ScalePicker(labels: Scale.level, value: $level)
             }
 
             noteSection
@@ -302,7 +297,7 @@ struct LogView: View {
                             }
                             Spacer(minLength: 4)
                             if let e, e.isLogged {
-                                Text("E\(e.energy > 0 ? String(e.energy) : "–")·F\(e.focus > 0 ? String(e.focus) : "–")")
+                                Text(e.level > 0 ? "집중 \(e.level)" : "집중 –")
                                     .font(.system(size: 11)).monospacedDigit().foregroundStyle(.tertiary)
                             }
                         }
@@ -384,14 +379,11 @@ struct LogView: View {
         note = e?.note ?? ""
         showNote = !(e?.note ?? "").isEmpty
         if let e {
-            energy = e.energy
-            focus = e.focus
+            level = e.level
         } else if let prev = store.entry(day, slot - store.settings.interval), !prev.skipped {
-            energy = prev.energy
-            focus = prev.focus
+            level = prev.level
         } else {
-            energy = 0
-            focus = 0
+            level = 0
         }
     }
 
@@ -401,7 +393,7 @@ struct LogView: View {
                 && note.trimmingCharacters(in: .whitespaces).isEmpty
         }
         return activity == e.activity && note == e.note
-            && energy == e.energy && focus == e.focus
+            && level == e.level
     }
 
     /// 블록 경계를 넘어가면 편집 화면도 따라간다. 단 입력 중이면 건드리지 않는다.
@@ -438,8 +430,7 @@ struct LogView: View {
         let suggested = store.autoClassify(act, day: editDay)
         store.put(day: editDay, slot: editSlot) {
             $0.activity = act
-            $0.energy = energy
-            $0.focus = focus
+            $0.focus = level
             $0.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
             $0.skipped = false
             // 이미 리뷰에서 확정한 블록을 고치는 중이면 그 분류를 존중한다

@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
     @State private var showWipeConfirm = false
+    @State private var trace = ""
 
     var body: some View {
         Form {
@@ -100,6 +101,8 @@ struct SettingsView: View {
                 Button("전체 초기화", role: .destructive) { showWipeConfirm = true }
             }
 
+            traceSection
+
             Section("왜 이걸 쓰나") {
                 Text("""
                 ① 하루에서 **낭비 블록**을 눈에 보이게 만들어 제거하고
@@ -111,7 +114,7 @@ struct SettingsView: View {
         }
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await refresh() }
+        .task { await refresh(); trace = Diag.trace }
         .confirmationDialog("모든 기록과 아이디어가 지워집니다.", isPresented: $showWipeConfirm, titleVisibility: .visible) {
             Button("전부 지우기", role: .destructive) {
                 store.wipe()
@@ -120,6 +123,33 @@ struct SettingsView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text("되돌릴 수 없어요. 먼저 내보내기를 권해요.")
+        }
+    }
+
+    // MARK: 마지막 흔적
+
+    /// 앱이 죽거나 굳었을 때, 죽기 직전까지 어디를 지나갔는지. 크래시는 메모리를
+    /// 가져가지만 이미 디스크에 쓴 것은 못 가져간다 — 그래서 맥 없이도 원인을
+    /// 넘겨줄 수 있다. 아무 일 없으면 이 칸은 아예 안 보인다.
+    @ViewBuilder private var traceSection: some View {
+        if !trace.isEmpty {
+            Section("마지막 흔적") {
+                Text("앱이 갑자기 꺼지거나 멈췄다면, 아래를 통째로 복사해서 보내 주세요. 어디서 그랬는지가 여기 남아 있어요.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+
+                Text(trace)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ShareLink(item: trace, preview: SharePreview("min30-trace.txt")) {
+                    Label("흔적 내보내기", systemImage: "square.and.arrow.up")
+                }
+                Button("흔적 지우기") {
+                    Diag.clearTrace()
+                    trace = ""
+                }
+            }
         }
     }
 

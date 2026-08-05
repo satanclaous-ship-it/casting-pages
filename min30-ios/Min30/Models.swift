@@ -180,8 +180,11 @@ struct Entry: Codable, Identifiable, Hashable, Sendable {
     var slot: Int            // 그 하루의 자정 기준 분 오프셋 (자정을 넘기면 1440 초과 가능)
     var activity: String = ""
     var category: Category?
-    var energy: Int = 0      // 0 = 미입력, 1...5
-    var focus: Int = 0
+    /// 예전엔 에너지와 집중력을 따로 물었다. 실제로 써 보니 같은 것을 두 번 묻는
+    /// 것이었고, 30분마다 두 번 고르는 건 그 자체로 기록을 미루는 이유가 됐다.
+    /// 이제 `focus` 하나만 받는다. `energy` 는 예전 기록을 읽기 위해 남겨 둔다.
+    var energy: Int = 0      // 더 이상 쓰지 않음 (예전 데이터 호환)
+    var focus: Int = 0       // 0 = 미입력, 1...5
     var impact: Int = -1     // 예전 모델 호환용. 이제 분류에서 파생된다.
     /// 분류를 사람이 확인했나. 낮에 기록할 때는 자동 분류가 제안으로만 들어가고
     /// 이 값이 false 로 남는다. 저녁 리뷰에서 한 번에 확인하면 true 가 된다.
@@ -197,6 +200,11 @@ struct Entry: Codable, Identifiable, Hashable, Sendable {
 
     var isLogged: Bool { !skipped && !activity.isEmpty }
     var buildsImpact: Bool { category?.buildsImpact ?? false }
+
+    /// 집계는 전부 이걸 쓴다. 집중력만 따로 물었던 시절 이후의 기록은 `focus` 에
+    /// 들어 있고, 그 전에 에너지만 적힌 기록도 값을 잃지 않게 이어받는다.
+    /// 마이그레이션으로 파일을 고쳐 쓰지 않는 이유는 — 되돌릴 수 없어서다.
+    var level: Int { focus > 0 ? focus : energy }
 }
 
 // MARK: - 아이디어
@@ -291,8 +299,8 @@ struct Settings: Codable, Sendable {
 // MARK: - 라벨
 
 enum Scale {
-    static let energy = ["방전", "낮음", "보통", "좋음", "최상"]
-    static let focus  = ["산만", "얕음", "보통", "깊음", "몰입"]
+    /// 하나만 묻는다. 에너지와 집중력은 결국 같은 것을 다르게 부른 것이었다.
+    static let level = ["산만", "얕음", "보통", "깊음", "몰입"]
 }
 
 // MARK: - 헬퍼

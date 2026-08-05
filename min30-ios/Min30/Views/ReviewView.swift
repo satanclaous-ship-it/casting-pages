@@ -27,7 +27,7 @@ struct ReviewView: View {
                         heatmapCard
                     } else {
                         timelineCard(s)
-                        energyFocusCard
+                        levelCard
                     }
                     categoryCard(s)
                     insightsCard(s)
@@ -170,8 +170,7 @@ struct ReviewView: View {
     private func tiles(_ s: Store.DaySummary) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 8)], spacing: 8) {
             StatTile(label: "기록률", value: "\(s.coverage)", unit: "%")
-            StatTile(label: "평균 에너지", value: s.energy > 0 ? String(format: "%.1f", s.energy) : "–", unit: "/5")
-            StatTile(label: "평균 집중력", value: s.focus > 0 ? String(format: "%.1f", s.focus) : "–", unit: "/5")
+            StatTile(label: "평균 집중력", value: s.level > 0 ? String(format: "%.1f", s.level) : "–", unit: "/5")
             StatTile(label: "회복", value: Fmt.hours(s.recoverHours))
         }
     }
@@ -240,7 +239,7 @@ struct ReviewView: View {
             tableDisclosure("표로 보기") {
                 ForEach(store.loggedEntries(day)) { e in
                     tableRow(Fmt.hhmm(e.slot), e.activity,
-                             "E\(e.energy > 0 ? String(e.energy) : "–") F\(e.focus > 0 ? String(e.focus) : "–")")
+                             e.level > 0 ? "집중 \(e.level)" : "집중 –")
                 }
             }
         }
@@ -255,46 +254,42 @@ struct ReviewView: View {
         return stride(from: startH, through: endH, by: step).map { $0 * 60 }
     }
 
-    // MARK: 에너지 · 집중력 — 같은 1–5 척도라 한 축에 두 계열
+    // MARK: 집중력 — 하루 동안 어떻게 오르내렸나
 
     private struct Point: Identifiable {
         let id: String
         let x: Int
         let y: Int
-        let series: String
     }
 
-    private var efPoints: [Point] {
-        var out: [Point] = []
-        for e in store.loggedEntries(day) {
-            let mid = e.slot + store.minutes(of: e) / 2   // 블록마다 자기 길이의 중앙
-            if e.energy > 0 { out.append(Point(id: "e\(e.slot)", x: mid, y: e.energy, series: "에너지")) }
-            if e.focus > 0 { out.append(Point(id: "f\(e.slot)", x: mid, y: e.focus, series: "집중력")) }
+    private var levelPoints: [Point] {
+        store.loggedEntries(day).compactMap { e in
+            guard e.level > 0 else { return nil }
+            // 블록마다 자기 길이의 중앙에 찍는다
+            return Point(id: "l\(e.slot)", x: e.slot + store.minutes(of: e) / 2, y: e.level)
         }
-        return out
     }
 
-    private var energyFocusCard: some View {
-        let pts = efPoints
-        let energyColor = Color(light: 0x2A78D6, dark: 0x3987E5)
-        let focusColor = Color(light: 0xEB6834, dark: 0xD95926)
+    private var levelCard: some View {
+        let pts = levelPoints
+        let lineColor = Color(light: 0x2A78D6, dark: 0x3987E5)
 
-        return Card(title: "에너지 · 집중력", subtitle: "1–5") {
-            if pts.count < 4 {
+        return Card(title: "집중력", subtitle: "1 산만 – 5 몰입") {
+            // 예전엔 두 계열이라 4점이 블록 2개였다. 이제 1점이 곧 1블록이니
+            // 같은 4를 두면 그려지기까지 두 배로 기다리게 된다. 선은 2점이면 된다.
+            if pts.count < 2 {
                 Text("기록이 조금 더 쌓이면 그려져요")
                     .font(.system(size: 13)).foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity).padding(.vertical, 20)
             } else {
+                // 계열이 하나뿐이니 범례도 색 구분도 필요 없다. 눈이 볼 게 줄었다.
                 Chart(pts) { p in
-                    LineMark(x: .value("시각", p.x), y: .value("값", p.y))
-                        .foregroundStyle(by: .value("계열", p.series))
+                    LineMark(x: .value("시각", p.x), y: .value("집중력", p.y))
                         .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("시각", p.x), y: .value("값", p.y))
-                        .foregroundStyle(by: .value("계열", p.series))
+                    PointMark(x: .value("시각", p.x), y: .value("집중력", p.y))
                         .symbolSize(56)
                 }
-                .chartForegroundStyleScale(["에너지": energyColor, "집중력": focusColor])
-                .chartLegend(position: .bottom, alignment: .leading)
+                .foregroundStyle(lineColor)
                 .chartYScale(domain: 1...5)
                 .chartYAxis {
                     AxisMarks(values: [1, 2, 3, 4, 5]) { v in
@@ -335,11 +330,11 @@ struct ReviewView: View {
     private var heatCells: [Cell] {
         var out: [Cell] = []
         for d in days {
-            let logged = store.loggedEntries(d).filter { $0.focus > 0 }
+            let logged = store.loggedEntries(d).filter { $0.level > 0 }
             for h in heatHours {
                 let inHour = logged.filter { $0.slot / 60 == h }
                 let avg = inHour.isEmpty ? 0
-                    : Double(inHour.reduce(0) { $0 + $1.focus }) / Double(inHour.count)
+                    : Double(inHour.reduce(0) { $0 + $1.level }) / Double(inHour.count)
                 out.append(Cell(id: "\(d)-\(h)",
                                 hour: String(format: "%02d", h % 24),
                                 day: Fmt.pretty(d),
@@ -388,14 +383,13 @@ struct ReviewView: View {
             tableDisclosure("표로 보기") {
                 ForEach(days, id: \.self) { d in
                     let l = store.loggedEntries(d)
-                    let en = l.filter { $0.energy > 0 }
-                    let fo = l.filter { $0.focus > 0 }
+                    let rated = l.filter { $0.level > 0 }
                     tableRow(
                         String(d.suffix(5)),
                         "\(l.count)블록",
-                        String(format: "E %.1f · F %.1f",
-                               en.isEmpty ? 0 : Double(en.reduce(0) { $0 + $1.energy }) / Double(en.count),
-                               fo.isEmpty ? 0 : Double(fo.reduce(0) { $0 + $1.focus }) / Double(fo.count))
+                        rated.isEmpty ? "집중 –"
+                            : String(format: "집중 %.1f",
+                                     Double(rated.reduce(0) { $0 + $1.level }) / Double(rated.count))
                     )
                 }
             }
@@ -477,9 +471,9 @@ struct ReviewView: View {
                                        Fmt.hhmm(w.from), Fmt.hhmm(w.to), w.avg)))
         }
         if !weekScope {
-            let lows = store.loggedEntries(day).filter { $0.energy > 0 && $0.energy <= 2 }
+            let lows = store.loggedEntries(day).filter { $0.level > 0 && $0.level <= 2 }
             if let first = lows.first {
-                items.append(("🔋", "에너지가 바닥난 블록 \(lows.count)개 — 가장 이른 건 \(Fmt.hhmm(first.slot)). 회복 루틴을 그 앞에 넣어 보세요."))
+                items.append(("🔋", "집중이 흐트러진 블록 \(lows.count)개 — 가장 이른 건 \(Fmt.hhmm(first.slot)). 회복 루틴을 그 앞에 넣어 보세요."))
             }
         }
         if s.impactHours == 0 && s.blocks >= 4 {

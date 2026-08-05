@@ -351,8 +351,7 @@ final class Store {
         var oneThingHours = 0.0
         var wasteHours = 0.0
         var recoverHours = 0.0
-        var energy = 0.0
-        var focus = 0.0
+        var level = 0.0            // 평균 집중력
         var coverage = 0
         var ideaCount = 0
         var rows: [CategoryRow] = []
@@ -374,15 +373,14 @@ final class Store {
         let all = days.flatMap { loggedEntries($0) }
         var minsByCat: [Category?: Int] = [:]
         var nByCat: [Category?: Int] = [:]
-        var eSum = 0, eN = 0, fSum = 0, fN = 0
+        var lSum = 0, lN = 0
         var impactMins = 0, oneThingMins = 0, wasteMins = 0, recoverMins = 0, totalMins = 0
         for x in all {
             let m = minutes(of: x)
             minsByCat[x.category, default: 0] += m
             nByCat[x.category, default: 0] += 1
             totalMins += m
-            if x.energy > 0 { eSum += x.energy; eN += 1 }
-            if x.focus > 0 { fSum += x.focus; fN += 1 }
+            if x.level > 0 { lSum += x.level; lN += 1 }
             // 분류가 곧 임팩트 판정이다 — 따로 묻지 않는다
             if x.buildsImpact { impactMins += m }
             if x.category == .onething { oneThingMins += m }
@@ -418,8 +416,7 @@ final class Store {
             oneThingHours: Double(oneThingMins) / 60,
             wasteHours: Double(wasteMins) / 60,
             recoverHours: Double(recoverMins) / 60,
-            energy: eN > 0 ? Double(eSum) / Double(eN) : 0,
-            focus: fN > 0 ? Double(fSum) / Double(fN) : 0,
+            level: lN > 0 ? Double(lSum) / Double(lN) : 0,
             coverage: possible > 0 ? Int((Double(total) / Double(possible) * 100).rounded()) : 0,
             ideaCount: ideas.filter { days.contains($0.day) }.count,
             rows: rows
@@ -429,7 +426,7 @@ final class Store {
     /// The run of consecutive blocks with the highest average focus — the
     /// window worth defending for tomorrow's most important work.
     func bestFocusWindow(_ day: String) -> (from: Int, to: Int, avg: Double, blocks: Int)? {
-        let list = loggedEntries(day).filter { $0.focus > 0 }
+        let list = loggedEntries(day).filter { $0.level > 0 }
         guard list.count >= 2 else { return nil }
         var best: (from: Int, to: Int, avg: Double, blocks: Int)?
         for i in list.indices {
@@ -437,7 +434,7 @@ final class Store {
             for j in i..<min(i + 4, list.count) {
                 // 연속 판정도 블록별 실제 길이를 쓴다
                 if j > i, list[j].slot != list[j - 1].slot + minutes(of: list[j - 1]) { break }
-                sum += list[j].focus
+                sum += list[j].level
                 n += 1
                 if n >= 2 {
                     let avg = Double(sum) / Double(n)
@@ -483,7 +480,7 @@ final class Store {
         let r = reviews[day] ?? DayReview()
         var L = ["# \(day) 하루 기록", ""]
         L.append("- 임팩트 시간: **\(Fmt.hours(s.impactHours))** / 기록 \(Fmt.hours(s.loggedHours))")
-        L.append(String(format: "- 평균 에너지 %.1f · 평균 집중력 %.1f · 기록률 %d%%", s.energy, s.focus, s.coverage))
+        L.append(String(format: "- 평균 집중력 %.1f · 기록률 %d%%", s.level, s.coverage))
         if let w = bestFocusWindow(day) {
             L.append(String(format: "- 최고 집중 구간: %@–%@ (평균 %.1f)", Fmt.hhmm(w.from), Fmt.hhmm(w.to), w.avg))
         }
@@ -493,7 +490,7 @@ final class Store {
         for e in loggedEntries(day) {
             var line = "- `\(Fmt.hhmm(e.slot))` \(e.activity)"
             if let c = e.category { line += " _(\(c.title))_" }
-            line += " — E\(e.energy > 0 ? String(e.energy) : "–")/F\(e.focus > 0 ? String(e.focus) : "–")"
+            line += " — 집중 \(e.level > 0 ? String(e.level) : "–")"
             if e.buildsImpact { line += " **임팩트**" }
             if !e.note.isEmpty { line += "\n    - " + e.note.replacingOccurrences(of: "\n", with: " ") }
             L.append(line)
@@ -512,7 +509,7 @@ final class Store {
 
     func exportCSV() -> String {
         func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
-        var lines = ["date,slot_start,slot_end,activity,category,energy,focus,impact,note"]
+        var lines = ["date,slot_start,slot_end,activity,category,focus,impact,note"]
         for day in entries.keys.sorted() {
             for slot in (entries[day] ?? [:]).keys.sorted() {
                 guard let e = entries[day]?[slot], e.isLogged else { continue }
@@ -520,8 +517,7 @@ final class Store {
                 lines.append([
                     day, Fmt.hhmm(slot), Fmt.hhmm(slot + minutes(of: e)),
                     q(e.activity), e.category?.title ?? "",
-                    e.energy > 0 ? String(e.energy) : "",
-                    e.focus > 0 ? String(e.focus) : "",
+                    e.level > 0 ? String(e.level) : "",
                     impact, q(e.note),
                 ].joined(separator: ","))
             }
