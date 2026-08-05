@@ -490,10 +490,13 @@ struct ReviewView: View {
 
     // MARK: 표 보기 — 어떤 차트도 색만으로 값을 전달하지 않도록
 
-    @ViewBuilder
+    /// DisclosureGroup stores its content closure, so a non-escaping parameter
+    /// can't be handed straight to it. Build the view value up front instead —
+    /// it's a struct, so there's nothing left to escape.
     private func tableDisclosure<C: View>(_ title: String, @ViewBuilder rows: () -> C) -> some View {
-        DisclosureGroup(title) {
-            VStack(spacing: 0) { rows() }
+        let content = rows()
+        return DisclosureGroup(title) {
+            VStack(spacing: 0) { content }
         }
         .font(.system(size: 12))
         .tint(.secondary)

@@ -28,7 +28,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     func requestAuthorization() async -> Bool {
         center.delegate = self
-        let ok = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .timeSensitive])) ?? false
+        // `.timeSensitive` as an *authorization option* was deprecated in iOS 15 —
+        // the level now comes from the entitlement plus the per-notification
+        // `interruptionLevel` set in `content(...)`.
+        let ok = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         if ok { await reschedule() }
         return ok
     }
@@ -118,6 +121,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         c.userInfo = userInfo
         c.sound = Store.shared.settings.sound ? .default : nil
         // A 30-minute ledger is worthless if the ping arrives an hour late.
+        // Breaking through Focus additionally needs the Time Sensitive
+        // Notifications capability (Xcode → Signing & Capabilities → +).
+        // Without it this is harmless — delivery is just normal priority.
         c.interruptionLevel = .timeSensitive
         c.relevanceScore = 1.0
         return c
