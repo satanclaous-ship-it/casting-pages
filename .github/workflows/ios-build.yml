@@ -1,0 +1,108 @@
+# Min30 을 GitHub 의 macOS 러너에서 빌드한다.
+#
+# 이 저장소에서 작업하는 에이전트는 맥에 접근할 수 없다. 이 워크플로가 그
+# 자리를 메운다 — 푸시할 때마다 여기서 컴파일하고, 실패하면 에러만 추려
+# 요약에 남긴다. 사람이 터미널을 열 필요가 없다.
+name: iOS 빌드
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'min30-ios/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode 확인
+        run: |
+          xcodebuild -version
+          echo "사용 가능한 SDK:"
+          xcodebuild -showsdks | grep -i simulator || true
+
+      - name: 프로젝트 파일이 열리는지
+        working-directory: min30-ios
+        run: |
+          if xcodebuild -project Min30.xcodeproj -list; then
+            echo "✓ .pbxproj 정상"
+          else
+            echo "::error::Xcode 가 Min30.xcodeproj 를 읽지 못했습니다 (손으로 작성한 pbxproj)"
+            exit 1
+          fi
+
+      - name: 빌드
+        id: build
+        working-directory: min30-ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Min30.xcodeproj \
+            -target Min30 \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: 에러 · 경고 정리
+        if: always()
+        working-directory: min30-ios
+        run: |
+          # 절대경로를 잘라 사람이 읽을 수 있게. 중복 제거.
+          grep -E "error:" build.log 2>/dev/null \
+            | sed "s|$GITHUB_WORKSPACE/min30-ios/||g" | sort -u > errors.txt || true
+          grep -E "warning:" build.log 2>/dev/null \
+            | sed "s|$GITHUB_WORKSPACE/min30-ios/||g" | sort -u > warnings.txt || true
+
+          ERRS=$(wc -l < errors.txt | tr -d ' ')
+          WARNS=$(wc -l < warnings.txt | tr -d ' ')
+
+          {
+            if [ "$ERRS" = "0" ]; then
+              echo "## ✅ 빌드 성공"
+            else
+              echo "## ❌ 빌드 에러 ${ERRS}건"
+              echo ''
+              echo '```'
+              head -80 errors.txt
+              echo '```'
+            fi
+            if [ "$WARNS" != "0" ]; then
+              echo ''
+              echo "<details><summary>경고 ${WARNS}건</summary>"
+              echo ''
+              echo '```'
+              head -40 warnings.txt
+              echo '```'
+              echo ''
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 로그에도 그대로 남긴다 — API 로 읽어가기 위해
+          echo "───────── ERRORS ─────────"
+          cat errors.txt
+          echo "───────── WARNINGS ─────────"
+          head -40 warnings.txt
+
+          [ "$ERRS" = "0" ] || exit 1
+
+      - name: 전체 로그 보관
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: min30-ios/build.log
+          retention-days: 7
