@@ -36,6 +36,11 @@ jobs:
       - name: 자동 분류 키워드 회귀 검사
         run: python3 min30-ios/Tests/classify_test.py
 
+      # 필드를 하나 늘렸다가 사용자의 하루치 기록을 실제로 날린 적이 있다.
+      # 합성된 디코더는 기본값이 있어도 키를 요구하기 때문이다.
+      - name: 저장 파일 호환성 검사
+        run: python3 min30-ios/Tests/codable_test.py
+
       - name: 스크립트 안의 파이썬 조각 문법 검사
         run: |
           python3 - <<'EOF'

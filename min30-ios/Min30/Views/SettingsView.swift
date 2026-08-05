@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
     @State private var showWipeConfirm = false
     @State private var trace = ""
+    @State private var rescued: String?
 
     var body: some View {
         Form {
@@ -101,6 +102,7 @@ struct SettingsView: View {
                 Button("전체 초기화", role: .destructive) { showWipeConfirm = true }
             }
 
+            rescueSection
             traceSection
 
             Section("왜 이걸 쓰나") {
@@ -114,7 +116,11 @@ struct SettingsView: View {
         }
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await refresh(); trace = Diag.trace }
+        .task {
+            await refresh()
+            trace = Diag.trace
+            rescued = store.quarantinedText()
+        }
         .confirmationDialog("모든 기록과 아이디어가 지워집니다.", isPresented: $showWipeConfirm, titleVisibility: .visible) {
             Button("전부 지우기", role: .destructive) {
                 store.wipe()
@@ -123,6 +129,27 @@ struct SettingsView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text("되돌릴 수 없어요. 먼저 내보내기를 권해요.")
+        }
+    }
+
+    // MARK: 읽지 못한 저장 파일
+
+    /// 저장 파일을 읽지 못하면 앱은 그걸 덮어쓰지 않고 옆으로 옮겨 둔다.
+    /// 여기서 통째로 꺼내갈 수 있다 — 자동으로 되살리지 않는 건, 무엇이 깨졌는지
+    /// 모르는 채로 덮어쓰는 게 지금 있는 기록까지 날릴 수 있어서다.
+    @ViewBuilder private var rescueSection: some View {
+        if let rescued {
+            Section("읽지 못한 저장 파일") {
+                Text("예전 기록 파일을 열지 못했어요. **덮어쓰지 않고 따로 보관해 뒀어요.** 내보내서 보내 주시면 살려서 돌려드릴게요.")
+                    .font(.system(size: 12.5))
+                ShareLink(item: rescued, preview: SharePreview("min30-rescue.json")) {
+                    Label("보관된 파일 내보내기", systemImage: "arrow.up.doc")
+                }
+                Button("이 알림 그만 보기") {
+                    store.dismissQuarantine()
+                    self.rescued = nil
+                }
+            }
         }
     }
 

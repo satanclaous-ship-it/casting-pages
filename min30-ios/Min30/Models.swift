@@ -207,10 +207,51 @@ struct Entry: Codable, Identifiable, Hashable, Sendable {
     var level: Int { focus > 0 ? focus : energy }
 }
 
+/// **기본값이 있어도 합성된 디코더는 키를 요구한다.** 이건 Swift 의 오래된 함정이고,
+/// 한 번 물렸다 — `categoryConfirmed` 를 새로 넣은 판을 올리는 순간, 그 키가 없는
+/// 예전 기록이 전부 디코딩에 실패했다. 실패한 로드는 조용히 빈 상태로 남았고,
+/// 다음 저장이 그 빈 상태로 파일을 덮어썼다. 하루치 기록이 그렇게 사라졌다.
+///
+/// 그래서 앞으로 필드가 늘거나 줄어도 예전 파일이 계속 읽히도록, 없는 키는
+/// 전부 기본값으로 받는다. `day` 와 `slot` 만 필수다 — 그게 없으면 이 기록이
+/// 어느 자리 것인지 알 수 없어서 살려낼 방법이 없다.
+extension Entry {
+    enum CodingKeys: String, CodingKey {
+        case id, day, slot, activity, category, energy, focus, impact
+        case categoryConfirmed, note, skipped, iv, createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day  = try c.decode(String.self, forKey: .day)
+        slot = try c.decode(Int.self, forKey: .slot)
+
+        id       = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        activity = try c.decodeIfPresent(String.self, forKey: .activity) ?? ""
+        category = try c.decodeIfPresent(Category.self, forKey: .category)
+        energy   = try c.decodeIfPresent(Int.self, forKey: .energy) ?? 0
+        focus    = try c.decodeIfPresent(Int.self, forKey: .focus) ?? 0
+        impact   = try c.decodeIfPresent(Int.self, forKey: .impact) ?? -1
+        categoryConfirmed = try c.decodeIfPresent(Bool.self, forKey: .categoryConfirmed) ?? false
+        note     = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        skipped  = try c.decodeIfPresent(Bool.self, forKey: .skipped) ?? false
+        iv       = try c.decodeIfPresent(Int.self, forKey: .iv)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
+}
+
 // MARK: - 아이디어
 
 enum IdeaStatus: String, Codable, CaseIterable, Identifiable, Sendable {
     case inbox, content, bank, vault, dropped
+
+    /// 모르는 값이 와도 던지지 않는다. 아이디어 하나의 상태 때문에 파일 전체가
+    /// 안 읽히는 건 말이 안 된다 — 모르면 수집함으로 되돌린다.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = IdeaStatus(rawValue: raw) ?? .inbox
+    }
 
     var id: String { rawValue }
 
@@ -245,6 +286,25 @@ struct Idea: Codable, Identifiable, Hashable, Sendable {
     var createdAt = Date()
 }
 
+extension Idea {
+    enum CodingKeys: String, CodingKey {
+        case id, text, status, day, slot, fromPing, createdAt
+    }
+
+    /// 본문만 필수다. 나머지는 없어도 아이디어를 살릴 수 있다.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+
+        id       = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        status   = try c.decodeIfPresent(IdeaStatus.self, forKey: .status) ?? .inbox
+        day      = try c.decodeIfPresent(String.self, forKey: .day) ?? ""
+        slot     = try c.decodeIfPresent(Int.self, forKey: .slot) ?? 0
+        fromPing = try c.decodeIfPresent(Bool.self, forKey: .fromPing) ?? false
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+}
+
 // MARK: - 회고 · 설정
 
 struct DayReview: Codable, Hashable, Sendable {
@@ -253,6 +313,17 @@ struct DayReview: Codable, Hashable, Sendable {
     var next = ""
 
     var isEmpty: Bool { win.isEmpty && cut.isEmpty && next.isEmpty }
+}
+
+extension DayReview {
+    enum CodingKeys: String, CodingKey { case win, cut, next }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        win  = try c.decodeIfPresent(String.self, forKey: .win) ?? ""
+        cut  = try c.decodeIfPresent(String.self, forKey: .cut) ?? ""
+        next = try c.decodeIfPresent(String.self, forKey: .next) ?? ""
+    }
 }
 
 struct Settings: Codable, Sendable {

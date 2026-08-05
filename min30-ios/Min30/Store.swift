@@ -19,11 +19,14 @@ final class Store {
 
     // MARK: 저장
 
+    /// 전부 옵셔널이다. 합성된 디코더는 키가 하나만 없어도 통째로 던지는데,
+    /// 그러면 필드를 하나 늘릴 때마다 예전 파일이 안 읽힌다. 옵셔널은 없으면
+    /// nil 로 받으므로 절대 던지지 않는다.
     private struct Snapshot: Codable {
-        var entries: [String: [Int: Entry]]
-        var ideas: [Idea]
-        var reviews: [String: DayReview]
-        var settings: Settings
+        var entries: [String: [Int: Entry]]?
+        var ideas: [Idea]?
+        var reviews: [String: DayReview]?
+        var settings: Settings?
         var oneThings: [String: String]?      // 날짜 → 그날의 원씽
     }
 
@@ -43,16 +46,57 @@ final class Store {
     /// 화면이 볼 값이 아니므로 관찰 대상에서 뺀다.
     @ObservationIgnored private var loadedStamp: Date?
 
+    /// 읽지 못한 파일을 옮겨 둔 자리. 있으면 설정 화면이 내보내기를 권한다.
+    @ObservationIgnored private(set) var quarantinedURL: URL?
+
     func load() {
-        guard let data = try? Data(contentsOf: Self.fileURL),
-              let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
-        entries = snap.entries
-        ideas = snap.ideas
-        reviews = snap.reviews
+        // 파일이 아예 없는 건 첫 실행이다. 정상.
+        guard let data = try? Data(contentsOf: Self.fileURL) else { return }
+
+        let snap: Snapshot
+        do {
+            snap = try JSONDecoder().decode(Snapshot.self, from: data)
+        } catch {
+            // 여기서 그냥 return 하면 빈 상태로 남고, 다음 저장이 그 빈 상태로
+            // 파일을 덮어쓴다. 실제로 그렇게 하루치 기록을 잃었다. 못 읽은 파일은
+            // 덮어쓰이지 않도록 옆으로 옮겨 두고, 사용자가 꺼내갈 수 있게 한다.
+            quarantine(error)
+            return
+        }
+
+        entries   = snap.entries ?? [:]
+        ideas     = snap.ideas ?? []
+        reviews   = snap.reviews ?? [:]
         oneThings = snap.oneThings ?? [:]
-        settings = snap.settings
+        settings  = snap.settings ?? Settings()
         loadedStamp = modifiedAt()
         stampLegacyIntervals()
+    }
+
+    private func quarantine(_ error: Error) {
+        let stamp = Int(Date().timeIntervalSince1970)
+        let dest = Self.fileURL.deletingLastPathComponent()
+            .appendingPathComponent("min30-읽지못함-\(stamp).json")
+        do {
+            try FileManager.default.moveItem(at: Self.fileURL, to: dest)
+            quarantinedURL = dest
+            Diag.mark("저장 파일을 읽지 못해 격리함: \(dest.lastPathComponent) — \(error)")
+        } catch {
+            // 옮기지도 못하면 최소한 덮어쓰지는 않게 저장을 막는다
+            quarantinedURL = Self.fileURL
+            Diag.mark("저장 파일을 읽지도 옮기지도 못함 — \(error)")
+        }
+        loadedStamp = nil
+    }
+
+    /// 격리된 파일 내용. 설정 화면에서 통째로 내보내 백업할 수 있다.
+    func quarantinedText() -> String? {
+        guard let quarantinedURL else { return nil }
+        return try? String(contentsOf: quarantinedURL, encoding: .utf8)
+    }
+
+    func dismissQuarantine() {
+        quarantinedURL = nil
     }
 
     private func modifiedAt() -> Date? {
