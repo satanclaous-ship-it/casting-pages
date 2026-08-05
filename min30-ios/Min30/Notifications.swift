@@ -221,8 +221,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let action = response.actionIdentifier
+        // userInfo 는 [AnyHashable: Any] 라 Sendable 이 아니다. 클로저 안으로
+        // 들고 들어가면 Swift 6 에서 에러가 되므로, 필요한 값만 여기서 꺼낸다.
         let info = response.notification.request.content.userInfo
         let slot = info["slot"] as? Int
+        let isReview = info["review"] as? Bool == true
         let text = (response as? UNTextInputNotificationResponse)?.userText
 
         await MainActor.run {
@@ -268,7 +271,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 }
 
             case UNNotificationDefaultActionIdentifier:
-                if info["review"] as? Bool == true { Router.shared.openReview() }
+                if isReview { Router.shared.openReview() }
                 else { Router.shared.open(slot: target) }
 
             case ID.openAction:
