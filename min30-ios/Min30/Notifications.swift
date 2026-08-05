@@ -109,8 +109,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             requests = weekdayWindow(span: span, interval: iv, reviewAt: s.reviewAt)
         }
 
+        // 완료를 기다리지 않는다. 예약 31개를 메인 액터에서 순차로 await 하면,
+        // 알림을 탭해 앱이 뜨는 순간(포그라운드 진입도 동시에 reschedule 한다)
+        // 메인 액터가 그 사슬에 묶여 화면이 먹통처럼 보인다. add 는 실패해도
+        // 다음 실행에서 다시 걸리므로 결과를 붙잡고 있을 이유가 없다.
         for r in requests.prefix(pendingCap) {
-            try? await center.add(r)
+            center.add(r)
         }
     }
 
@@ -282,9 +286,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             }
         }
 
-        // keep the rolling window topped up (weekday-only mode needs this)
-        if !Store.shared.settings.weekend {
-            await reschedule()
+        // 여기서 await 하지 않는다. iOS 는 이 async 메서드가 반환돼야 알림 처리가
+        // 끝났다고 보는데, 탭으로 앱이 뜨는 중이라면 그 사이 앱이 응답 없는 것처럼
+        // 보인다. 예약 갱신은 급하지 않으니 떼어 보낸다.
+        Task { @MainActor in
+            if !Store.shared.settings.weekend { await Notifier.shared.reschedule() }
         }
     }
 }

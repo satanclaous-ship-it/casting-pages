@@ -39,6 +39,9 @@ final class Store {
 
     private init() { load() }
 
+    /// 마지막으로 읽어들인 파일의 수정 시각. 바뀌지 않았으면 다시 읽지 않는다.
+    private var loadedStamp: Date?
+
     func load() {
         guard let data = try? Data(contentsOf: Self.fileURL),
               let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
@@ -47,7 +50,12 @@ final class Store {
         reviews = snap.reviews
         oneThings = snap.oneThings ?? [:]
         settings = snap.settings
+        loadedStamp = modifiedAt()
         stampLegacyIntervals()
+    }
+
+    private func modifiedAt() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: Self.fileURL.path))?[.modificationDate] as? Date
     }
 
     /// Stamp the block length onto anything recorded before `iv` existed, using
@@ -86,9 +94,15 @@ final class Store {
         }
     }
 
-    /// A background launch (notification action) may have written while the
-    /// foreground copy sat idle. Re-read before showing anything.
-    func reloadFromDisk() { load() }
+    /// 백그라운드 실행(알림 액션)이 그 사이 파일을 썼을 수 있으니 다시 읽는다.
+    /// 다만 **바뀐 게 없으면 읽지 않는다** — 이건 메인 스레드에서 도는 동기
+    /// 파일 읽기 + JSON 디코딩이라, 포그라운드 진입 때마다 무조건 돌리면
+    /// 기록이 쌓일수록 앱이 뜨는 순간 눈에 띄게 버벅인다.
+    func reloadFromDisk() {
+        let now = modifiedAt()
+        if let now, let last = loadedStamp, now <= last { return }
+        load()
+    }
 
     // MARK: 시간 · 블록
 
@@ -235,15 +249,19 @@ final class Store {
     }
 
     /// 제안이 다 맞을 때. 하루치를 한 번에 넘긴다.
+    /// put 을 반복 호출하면 블록마다 전체 스냅샷을 다시 인코딩한다 — 30개면
+    /// 저장이 30번이다. 메모리에서 다 고치고 한 번만 저장한다.
     func confirmAllSuggestions(_ day: String) {
-        for e in unconfirmed(day) {
+        let pending = unconfirmed(day)
+        guard !pending.isEmpty else { return }
+        for e in pending {
             let c = e.category ?? autoClassify(e.activity, day: day)
-            put(day: day, slot: e.slot) {
-                $0.category = c
-                $0.categoryConfirmed = true
-                $0.impact = c.legacyImpact
-            }
+            entries[day]?[e.slot]?.category = c
+            entries[day]?[e.slot]?.categoryConfirmed = true
+            entries[day]?[e.slot]?.impact = c.legacyImpact
+            entries[day]?[e.slot]?.updatedAt = Date()
         }
+        save()
     }
 
     /// 자동 분류를 고쳤을 때만 부른다. 다음부터 같은 표현은 바로 맞춘다.
