@@ -25,6 +25,38 @@ Xcode로 빌드합니다 (`.github/workflows/ios-build.yml`). 에러가 나면 e
 
 즉 **컴파일은 CI가, 로직은 대조가** 지킵니다.
 
+### 실기기 동작 — 여기는 로그로 봅니다
+
+컴파일과 로직은 위에서 지키지만, **실기기에서 실제로 어떻게 도는지는 확인할 수
+없습니다** (작성 환경에 아이폰이 없습니다). 그래서 앱이 굳었을 때 어디까지 갔는지
+`os_log` 로 남깁니다. 맥에서:
+
+```bash
+log stream --predicate 'subsystem == "com.satanclaous.min30"' --style compact
+```
+
+이 상태로 알림 배너를 누르면 이렇게 찍힙니다:
+
+```
+▶︎ didReceive action=com.apple.UNNotificationDefaultActionIdentifier
+┌ didReceive.main
+└ didReceive.main 1.2ms
+▶︎ scenePhase=active
+┌ pendingSlot→seat(600)
+└ pendingSlot→seat(600) 0.4ms
+▶︎ reschedule 시작
+▶︎ reschedule 끝
+```
+
+읽는 법은 두 가지뿐입니다.
+
+- **`┌` 에 짝이 되는 `└` 가 없다** → 거기서 메인 스레드가 막혔습니다.
+- **`↻ ... ×200, ×400, ×600` 이 쏟아진다** → 뷰 갱신이 무한히 돌고 있습니다.
+  화면이 굳는 건 같지만 원인도 고치는 법도 완전히 다릅니다.
+
+`os_log` 는 잠금 없는 링버퍼에 쓰기 때문에 메인 스레드를 붙잡지 않습니다.
+그래서 진단이 끝나도 그냥 둡니다.
+
 ---
 
 ## 맥북에서 시작하기 — 한 줄
@@ -131,6 +163,7 @@ Min30/
   Store.swift         단일 JSON 파일 영속화, 블록 계산, 집계
   Notifications.swift 예약·카테고리·액션 처리 ← 네이티브의 핵심
   Speech.swift        SFSpeechRecognizer 한국어 받아쓰기
+  Diag.swift          멈춘 지점을 찾기 위한 os_log 흔적
   Views/
     Components.swift  척도·카드·범례
     LogView.swift     2단계 입력 (무엇을 했나 → 에너지·집중력)

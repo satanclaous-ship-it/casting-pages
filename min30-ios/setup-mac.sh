@@ -282,6 +282,16 @@ PY
 
   echo
   info "Xcode 로 열기:  open $PROJ_DIR/Min30.xcodeproj"
+
+  echo
+  bold "앱이 멈추면 — 어디서 멈췄는지 보는 법"
+  echo "  아래를 새 터미널에 붙여넣고, 그 상태로 알림 배너를 눌러 보세요."
+  echo "  마지막에 찍힌 줄이 곧 멈춘 지점입니다. 그대로 복사해 Claude 에게 주세요."
+  echo
+  echo "    log stream --predicate 'subsystem == \"com.satanclaous.min30\"' --style compact"
+  echo
+  echo "  ┌ 로 시작한 줄에 짝이 되는 └ 가 없으면 거기서 막힌 겁니다."
+  echo "  ↻ 줄이 폭포처럼 쏟아지면 화면 갱신이 무한히 도는 겁니다 (원인이 다릅니다)."
 else
   bold "❌ 빌드 에러 ${ERR_N}건"
   echo
