@@ -84,7 +84,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     // MARK: 예약
 
     func reschedule() async {
-        registerCategories()
+        Diag.mark("reschedule 시작")
+        defer { Diag.mark("reschedule 끝") }
+        Diag.span("registerCategories") { registerCategories() }
         center.removeAllPendingNotificationRequests()
 
         let s = Store.shared.settings
@@ -113,8 +115,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         // 알림을 탭해 앱이 뜨는 순간(포그라운드 진입도 동시에 reschedule 한다)
         // 메인 액터가 그 사슬에 묶여 화면이 먹통처럼 보인다. add 는 실패해도
         // 다음 실행에서 다시 걸리므로 결과를 붙잡고 있을 이유가 없다.
+        //
+        // `withCompletionHandler:` 를 명시해야 콜백 버전이 잡힌다. 이 함수가
+        // async 라 그냥 add(r) 이라고 쓰면 `async throws` 오버로드가 골라진다.
         for r in requests.prefix(pendingCap) {
-            center.add(r)
+            center.add(r, withCompletionHandler: nil)
         }
     }
 
@@ -232,7 +237,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let isReview = info["review"] as? Bool == true
         let text = (response as? UNTextInputNotificationResponse)?.userText
 
-        await MainActor.run {
+        Diag.mark("didReceive action=\(action)")
+
+        await MainActor.run { Diag.span("didReceive.main") {
             let store = Store.shared
             // another background launch may have written since we last loaded
             store.reloadFromDisk()
@@ -284,7 +291,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             default:
                 break
             }
-        }
+        } }
 
         // 여기서 await 하지 않는다. iOS 는 이 async 메서드가 반환돼야 알림 처리가
         // 끝났다고 보는데, 탭으로 앱이 뜨는 중이라면 그 사이 앱이 응답 없는 것처럼
@@ -292,6 +299,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         Task { @MainActor in
             if !Store.shared.settings.weekend { await Notifier.shared.reschedule() }
         }
+        Diag.mark("didReceive 끝")
     }
 }
 

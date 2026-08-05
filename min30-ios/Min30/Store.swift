@@ -40,7 +40,8 @@ final class Store {
     private init() { load() }
 
     /// 마지막으로 읽어들인 파일의 수정 시각. 바뀌지 않았으면 다시 읽지 않는다.
-    private var loadedStamp: Date?
+    /// 화면이 볼 값이 아니므로 관찰 대상에서 뺀다.
+    @ObservationIgnored private var loadedStamp: Date?
 
     func load() {
         guard let data = try? Data(contentsOf: Self.fileURL),
@@ -80,16 +81,29 @@ final class Store {
         if touched { save() }
     }
 
+    /// 아직 디스크에 안 내려간 저장이 몇 건인지. 0 이 아니면 메모리 쪽이 최신이다.
+    @ObservationIgnored private var writesInFlight = 0
+
     func save() {
         let snap = Snapshot(entries: entries, ideas: ideas, reviews: reviews,
                             settings: settings, oneThings: oneThings)
+        writesInFlight += 1
         queue.async { [weak self] in
+            let ok: Bool
             do {
                 let data = try JSONEncoder().encode(snap)
                 try data.write(to: Self.fileURL, options: .atomic)
-                Task { @MainActor in self?.lastSaveFailed = false }
+                ok = true
             } catch {
-                Task { @MainActor in self?.lastSaveFailed = true }
+                ok = false
+            }
+            Task { @MainActor in
+                guard let self else { return }
+                self.lastSaveFailed = !ok
+                self.writesInFlight -= 1
+                // 방금 내가 쓴 파일이다. 이 시각을 기억해 두지 않으면 다음 포그라운드
+                // 진입 때 "파일이 바뀌었네" 하고 자기가 쓴 걸 도로 읽는다.
+                if ok { self.loadedStamp = self.modifiedAt() }
             }
         }
     }
@@ -99,9 +113,12 @@ final class Store {
     /// 파일 읽기 + JSON 디코딩이라, 포그라운드 진입 때마다 무조건 돌리면
     /// 기록이 쌓일수록 앱이 뜨는 순간 눈에 띄게 버벅인다.
     func reloadFromDisk() {
+        // 내 저장이 아직 날아가는 중이면 파일이 옛날 내용이다. 그걸 읽어들이면
+        // 방금 적은 블록이 조용히 사라진다 — 메모리 쪽이 최신이니 그냥 둔다.
+        guard writesInFlight == 0 else { return }
         let now = modifiedAt()
         if let now, let last = loadedStamp, now <= last { return }
-        load()
+        Diag.span("reloadFromDisk") { load() }
     }
 
     // MARK: 시간 · 블록

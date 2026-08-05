@@ -32,6 +32,7 @@ struct LogView: View {
     private let tick = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
     var body: some View {
+        let _ = Diag.beat("LogView.body")
         ScrollView {
             VStack(spacing: 14) {
                 catchUpCard
@@ -52,7 +53,9 @@ struct LogView: View {
         .onReceive(tick) { _ in followClock() }
         .onChange(of: router.pendingSlot) { _, new in
             if let new {
-                seat(day: store.logicalDay(), slot: new)
+                Diag.span("pendingSlot→seat(\(new))") {
+                    seat(day: store.logicalDay(), slot: new)
+                }
                 router.pendingSlot = nil
             }
         }

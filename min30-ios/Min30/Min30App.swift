@@ -23,6 +23,7 @@ struct Min30App: App {
                     await Notifier.shared.reschedule()
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    Diag.mark("scenePhase=\(phase)")
                     if phase == .active {
                         store.reloadFromDisk()
                         Task { await Notifier.shared.reschedule() }
@@ -38,6 +39,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var router = router
+        let _ = Diag.beat("RootView.body")
 
         TabView(selection: $router.tab) {
             NavigationStack { LogView() }
