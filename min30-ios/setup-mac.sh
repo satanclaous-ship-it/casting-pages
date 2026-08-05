@@ -54,10 +54,30 @@ bold $'\n▶ 2/5  소스 받기'
 if [[ -d "$DEST/.git" ]]; then
   info "이미 있어요 → 최신으로 갱신"
   # FETCH_HEAD 로 맞춘다. 얕은 클론이면 origin/<branch> 가 갱신 안 될 수 있다.
-  git -C "$DEST" fetch origin "$BRANCH" --quiet 2>/dev/null \
-    && git -C "$DEST" checkout -B "$BRANCH" --quiet FETCH_HEAD 2>/dev/null \
-    && ok "갱신 완료: $DEST" \
-    || { bad "갱신 실패 — 인터넷 연결이나 $DEST 상태를 확인해 주세요."; exit 1; }
+  if ! git -C "$DEST" fetch origin "$BRANCH" --quiet 2>/dev/null; then
+    bad "fetch 실패 — 인터넷 연결을 확인해 주세요."
+    exit 1
+  fi
+  if ! git -C "$DEST" checkout -B "$BRANCH" --quiet FETCH_HEAD 2>/dev/null; then
+    # Xcode 가 서명 설정을 pbxproj 에 써 넣으면 갱신과 충돌한다. 그 편집은
+    # 사용자 것이니 버리지 않고 치워 뒀다가 되살린다.
+    info "로컬 수정(서명 설정 등)과 겹쳐요 → 잠시 치워 두고 갱신할게요"
+    git -C "$DEST" stash push --quiet --include-untracked -m "min30-setup" 2>/dev/null || true
+    if git -C "$DEST" checkout -B "$BRANCH" --quiet FETCH_HEAD 2>/dev/null; then
+      if git -C "$DEST" stash pop --quiet 2>/dev/null; then
+        ok "갱신 완료 (로컬 수정 되살림)"
+      else
+        bad "로컬 수정을 되살리는 중 충돌 — 최신 코드로만 진행합니다."
+        info "Xcode 에서 Team 을 다시 골라야 할 수 있어요."
+        git -C "$DEST" checkout --theirs . 2>/dev/null || true
+      fi
+    else
+      bad "갱신 실패 — $DEST 상태를 확인해 주세요."
+      exit 1
+    fi
+  else
+    ok "갱신 완료: $DEST"
+  fi
 else
   git clone --branch "$BRANCH" --depth 1 "$REPO_URL" "$DEST" --quiet 2>/dev/null \
     && ok "받았어요: $DEST" \
@@ -202,15 +222,20 @@ PY
       info "무선이라 설치가 조금 느려요. 아이폰 잠금을 풀어 두세요."
     fi
     info "서명해서 빌드 중…"
-    if xcodebuild \
+    # 스킴이 손상됐거나 Xcode 가 다시 쓴 경우가 있어 -target 으로도 시도한다.
+    device_build() {
+      xcodebuild \
         -project Min30.xcodeproj \
-        -scheme Min30 \
+        "$1" Min30 \
         -configuration Debug \
         -destination "platform=iOS,id=$UDID" \
         -allowProvisioningUpdates \
         DEVELOPMENT_TEAM="$TEAM" \
         -derivedDataPath ./.dd \
-        build > device-build.log 2>&1
+        build >> device-build.log 2>&1
+    }
+    : > device-build.log
+    if device_build -scheme || { info "스킴으로 실패 → 타깃으로 다시 시도"; device_build -target; }
     then
       APP="$(find ./.dd/Build/Products -maxdepth 2 -name 'Min30.app' -type d 2>/dev/null | head -1)"
       info "설치 중…"
@@ -229,11 +254,23 @@ PY
         info "안 되면 Xcode 에서 기기를 고르고 ⌘R. 로그: $PROJ_DIR/install.log"
       fi
     else
-      bad "기기용 빌드 실패 — 보통 서명 설정이 아직 없어서예요."
-      grep -E "error:|Signing|provisioning" device-build.log 2>/dev/null | sed "s|$PROJ_DIR/||g" | sort -u | head -12
+      bad "기기용 빌드 실패 — 원인은 아래에."
       echo
-      info "Xcode 에서 Team 을 한 번만 골라 주세요 → Signing & Capabilities"
-      info "그다음 ⌘R. 이후로는 이 스크립트가 알아서 설치해요."
+      echo "────────── 여기부터 복사해서 Claude 에게 ──────────"
+      # 원인이 안 찍히면 진단이 불가능하다. 패턴에 안 걸리면 로그 끝을 그대로 보여준다.
+      DIAG="$(grep -iE "error|failed|denied|unable|not found|no such|scheme|provisioning|signing|entitlement" \
+                device-build.log 2>/dev/null \
+              | sed "s|$PROJ_DIR/||g" | grep -v '^$' | sort -u | head -15)"
+      [[ -n "$DIAG" ]] || DIAG="$(tail -25 device-build.log)"
+      echo "$DIAG"
+      echo "─────────────────────── 여기까지 ───────────────────────"
+      if command -v pbcopy >/dev/null 2>&1; then
+        printf '%s\n' "$DIAG" | pbcopy
+        ok "클립보드에도 담았어요 — ⌘V 로 붙여넣으면 돼요"
+      fi
+      echo
+      info "그동안은 Xcode 에서 ⌘R 로 올리면 됩니다 (소스는 이미 최신)."
+      info "전체 로그: $PROJ_DIR/device-build.log"
     fi
   fi
 
