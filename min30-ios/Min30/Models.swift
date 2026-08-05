@@ -2,51 +2,160 @@ import Foundation
 import SwiftUI
 import UIKit
 
-// MARK: - 분류
+// MARK: - 분류 (『원씽』 기준)
 
-/// The eight buckets a block can fall into. The colors are a categorical
-/// palette validated for colorblind separation in both light and dark; the
-/// order is part of that validation, so don't reshuffle it casually.
-enum Category: String, CaseIterable, Codable, Identifiable, Sendable {
-    case deep, shallow, comm, learn, health, rest, social, waste
+/// 게리 켈러의 『원씽』이 시간을 보는 방식을 그대로 옮긴 것.
+///
+/// 책의 핵심은 "많이 한 것"과 "성과를 만든 것"은 다르다는 것, 그리고 결과의
+/// 대부분은 소수의 행동에서 나온다는 것. 그래서 분류 자체가 곧 임팩트 판정이
+/// 된다 — 별도로 "이게 임팩트였나?" 를 다시 물을 필요가 없다.
+///
+/// 회복이 낭비와 분리돼 있는 것도 책을 따른 것이다. 켈러는 휴식을 먼저
+/// 캘린더에 박아두라고 한다. 의도한 쉼은 성과의 반대가 아니라 조건이다.
+enum Category: String, CaseIterable, Identifiable, Sendable {
+    case onething   // 오늘 이것만 하면 나머지가 쉬워지거나 필요 없어지는 그 하나
+    case leverage   // 성과로 이어지는 일. 그날의 원씽은 아니지만 20% 쪽
+    case learn      // 미래의 레버리지를 만드는 투입
+    case maintain   // 해야 하지만 성과를 만들지는 않는 80% — 메일, 행정, 잡무
+    case recover    // 의도한 회복. 잠, 운동, 식사, 사람
+    case waste      // 원치 않았는데 빨려 들어간 시간. 둠스크롤
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .deep:    return "몰입 작업"
-        case .shallow: return "잡무 처리"
-        case .comm:    return "회의·소통"
-        case .learn:   return "학습·인풋"
-        case .health:  return "운동·건강"
-        case .rest:    return "휴식·회복"
-        case .social:  return "관계·사교"
-        case .waste:   return "낭비·산만"
+        case .onething: return "원씽"
+        case .leverage: return "레버리지"
+        case .learn:    return "배움"
+        case .maintain: return "유지"
+        case .recover:  return "회복"
+        case .waste:    return "낭비"
         }
     }
 
-    /// Light / dark steps chosen per mode — not an automatic flip.
+    var blurb: String {
+        switch self {
+        case .onething: return "이것만 하면 나머지가 쉬워지는 그 하나"
+        case .leverage: return "성과로 이어지는 일"
+        case .learn:    return "나중에 레버리지가 될 인풋"
+        case .maintain: return "해야 하지만 성과는 아닌 것"
+        case .recover:  return "의도한 쉼 · 몸 · 사람"
+        case .waste:    return "빨려 들어간 시간"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .onething: return "target"
+        case .leverage: return "arrow.up.right"
+        case .learn:    return "book"
+        case .maintain: return "tray.full"
+        case .recover:  return "leaf"
+        case .waste:    return "arrow.down.right"
+        }
+    }
+
+    /// 색각이상 분리를 양쪽 모드에서 검증한 순서 — 임의로 섞지 말 것.
     var color: Color {
         switch self {
-        case .deep:    return Color(light: 0x2A78D6, dark: 0x3987E5)
-        case .shallow: return Color(light: 0xEB6834, dark: 0xD95926)
-        case .comm:    return Color(light: 0x1BAF7A, dark: 0x199E70)
-        case .learn:   return Color(light: 0xEDA100, dark: 0xC98500)
-        case .health:  return Color(light: 0xE87BA4, dark: 0xD55181)
-        case .rest:    return Color(light: 0x008300, dark: 0x008300)
-        case .social:  return Color(light: 0x4A3AA7, dark: 0x9085E9)
-        case .waste:   return Color(light: 0xE34948, dark: 0xE66767)
+        case .onething: return Color(light: 0x2A78D6, dark: 0x3987E5)
+        case .leverage: return Color(light: 0x1BAF7A, dark: 0x199E70)
+        case .learn:    return Color(light: 0xEDA100, dark: 0xC98500)
+        case .maintain: return Color(light: 0x4A3AA7, dark: 0x9085E9)
+        case .recover:  return Color(light: 0x008300, dark: 0x008300)
+        case .waste:    return Color(light: 0xE34948, dark: 0xE66767)
         }
     }
 
-    /// Tapping one tag should fill in a believable impact, still one tap from
-    /// being corrected. Impact is the number this whole ledger exists for.
-    var defaultImpact: Int {
+    /// 이 시간이 성과를 만들었나. 대시보드의 히어로 숫자가 이걸로 계산된다.
+    var buildsImpact: Bool { self == .onething || self == .leverage }
+
+    /// 예전 모델의 0…2 임팩트 필드와 호환시키기 위한 값.
+    var legacyImpact: Int {
         switch self {
-        case .deep:  return 2
-        case .waste: return 0
-        default:     return 1
+        case .onething, .leverage: return 2
+        case .learn:               return 1
+        case .maintain, .recover:  return 1
+        case .waste:               return 0
         }
+    }
+}
+
+/// 예전 8개 분류로 저장된 데이터를 조용히 받아준다. 이게 없으면 디코딩이
+/// 통째로 실패해서 기록이 다 날아간다.
+extension Category: Codable {
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "deep":                      self = .leverage
+        case "shallow", "comm":           self = .maintain
+        case "health", "rest", "social":  self = .recover
+        default:                          self = Category(rawValue: raw) ?? .maintain
+        }
+    }
+}
+
+// MARK: - 자동 분류
+
+enum AutoTag {
+    /// 표현이 조금씩 달라도 걸리도록 공백과 대소문자를 지운다.
+    static func norm(_ s: String) -> String {
+        s.lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+    }
+
+    /// 키워드는 "포함" 으로 본다. 한국어는 조사가 붙어도 어간이 남기 때문에
+    /// 접두 매칭보다 포함 매칭이 훨씬 잘 맞는다.
+    static let keywords: [(Category, [String])] = [
+        (.waste, [
+            "유튜브", "youtube", "인스타", "instagram", "틱톡", "tiktok", "릴스", "reels",
+            "쇼츠", "shorts", "트위터", "twitter", "엑스", "페북", "페이스북", "facebook",
+            "레딧", "reddit", "커뮤니티", "디시", "스크롤", "scroll", "둠스크롤", "doomscroll",
+            "눈팅", "알고리즘", "웹서핑", "서핑", "딴짓", "멍때", "뉴스", "news", "쇼핑",
+            "넷플릭스", "netflix", "게임", "game",
+        ]),
+        (.recover, [
+            "휴식", "쉬", "낮잠", "잠", "수면", "sleep", "nap", "산책", "walk",
+            "운동", "헬스", "gym", "요가", "yoga", "스트레칭", "러닝", "조깅", "run",
+            "명상", "meditat", "샤워", "목욕", "식사", "밥", "점심", "저녁", "아침",
+            "lunch", "dinner", "breakfast", "커피", "coffee", "가족", "친구", "데이트",
+            "약속", "사람", "대화", "이동", "출근", "퇴근", "commute", "rest",
+        ]),
+        (.learn, [
+            "공부", "학습", "study", "강의", "lecture", "course", "독서", "책", "read",
+            "논문", "paper", "문서", "docs", "튜토리얼", "tutorial", "스터디", "세미나",
+            "컨퍼런스", "conference", "리서치", "research", "조사", "정리노트", "학습",
+        ]),
+        (.maintain, [
+            "이메일", "메일", "email", "메시지", "슬랙", "slack", "카톡", "답장", "회신",
+            "reply", "정리", "잡무", "행정", "admin", "서류", "인보이스", "invoice",
+            "정산", "세금", "회계", "미팅", "회의", "meeting", "통화", "콜", "call",
+            "스탠드업", "standup", "청소", "빨래", "장보기", "은행", "예약", "문의",
+            "고객", "cs", "지원", "support",
+        ]),
+        (.leverage, [
+            "개발", "코딩", "코드", "code", "dev", "빌드", "build", "구현", "리팩",
+            "디자인", "design", "설계", "기획", "글쓰기", "집필", "원고", "write",
+            "제작", "편집", "촬영", "녹음", "영상", "콘텐츠", "content", "마케팅",
+            "marketing", "세일즈", "영업", "sales", "제안", "피칭", "pitch", "투자",
+            "심사", "출시", "배포", "deploy", "ship", "앱스토어", "전략", "strategy",
+            "작업", "만들",
+        ]),
+    ]
+
+    /// 매칭이 없으면 유지로 둔다. 성과 쪽으로 기울여 두면 스스로를 속이게 되고,
+    /// 낭비 쪽으로 기울여 두면 억울해진다. 유지가 가장 정직한 기본값이다.
+    static let fallback: Category = .maintain
+
+    static func classify(_ text: String) -> Category {
+        let n = norm(text)
+        guard !n.isEmpty else { return fallback }
+        // 낭비 → 회복 → 배움 → 유지 → 레버리지 순으로 본다. 구체적인 쪽이 먼저.
+        for (cat, words) in keywords where words.contains(where: { n.contains($0) }) {
+            return cat
+        }
+        return fallback
     }
 }
 
@@ -60,17 +169,17 @@ struct Entry: Codable, Identifiable, Hashable, Sendable {
     var category: Category?
     var energy: Int = 0      // 0 = 미입력, 1...5
     var focus: Int = 0
-    var impact: Int = -1     // -1 = 미입력, 0 낮음 / 1 보통 / 2 높음
+    var impact: Int = -1     // 예전 모델 호환용. 이제 분류에서 파생된다.
     var note: String = ""
     var skipped: Bool = false
     /// 기록 당시의 블록 길이(분). 이걸 저장해 두지 않으면 나중에 간격을 바꿀 때
-    /// 과거 기록이 통째로 다시 환산된다 — 30분으로 쌓은 8블록이 60분으로 바꾸는
-    /// 순간 4시간에서 8시간이 되어 버린다. nil 은 iv 도입 이전 데이터.
+    /// 과거 기록이 통째로 다시 환산된다.
     var iv: Int?
     var createdAt = Date()
     var updatedAt = Date()
 
     var isLogged: Bool { !skipped && !activity.isEmpty }
+    var buildsImpact: Bool { category?.buildsImpact ?? false }
 }
 
 // MARK: - 아이디어
@@ -111,13 +220,7 @@ struct Idea: Codable, Identifiable, Hashable, Sendable {
     var createdAt = Date()
 }
 
-// MARK: - 태그 · 회고 · 설정
-
-struct Tag: Codable, Identifiable, Hashable, Sendable {
-    var id = UUID()
-    var name: String
-    var category: Category
-}
+// MARK: - 회고 · 설정
 
 struct DayReview: Codable, Hashable, Sendable {
     var win = ""
@@ -134,10 +237,10 @@ struct Settings: Codable, Sendable {
     var reviewAt: Int = 21 * 60 + 30
     var weekend: Bool = true
     var sound: Bool = true
-    var quickMode: Bool = true
-    var tags: [Tag] = Tag.starter
+    /// 자동 분류를 고쳤을 때 그 표현을 기억한다. 다음부터는 바로 맞춘다.
+    var learned: [String: Category] = [:]
 
-    /// The waking window, with the end pushed past midnight when it wraps.
+    /// 깨어 있는 창. 자정을 넘기면 끝을 24시간 뒤로 민다.
     var span: (start: Int, end: Int, wraps: Bool) {
         let s = dayStart
         var e = dayEnd
@@ -145,28 +248,27 @@ struct Settings: Codable, Sendable {
         if wraps { e += 1440 }
         return (s, e, wraps)
     }
-}
 
-extension Tag {
-    /// Usable on day one; anything typed in 자세히 모드 joins this automatically.
-    static let starter: [Tag] = [
-        Tag(name: "개발", category: .deep),
-        Tag(name: "기획·설계", category: .deep),
-        Tag(name: "글쓰기", category: .deep),
-        Tag(name: "이메일·메시지", category: .shallow),
-        Tag(name: "잡무 처리", category: .shallow),
-        Tag(name: "미팅", category: .comm),
-        Tag(name: "통화", category: .comm),
-        Tag(name: "공부·리서치", category: .learn),
-        Tag(name: "운동", category: .health),
-        Tag(name: "산책", category: .health),
-        Tag(name: "식사", category: .rest),
-        Tag(name: "휴식", category: .rest),
-        Tag(name: "이동", category: .rest),
-        Tag(name: "사람 만남", category: .social),
-        Tag(name: "SNS", category: .waste),
-        Tag(name: "유튜브", category: .waste),
-    ]
+    enum CodingKeys: String, CodingKey {
+        case interval, dayStart, dayEnd, reviewAt, weekend, sound, learned
+    }
+
+    init() {}
+
+    /// 없는 키는 기본값으로 채운다. 합성된 디코더는 키가 하나만 빠져도
+    /// 통째로 실패하는데, 그러면 설정 하나 늘리거나 줄일 때마다 사용자의
+    /// 기록 전체가 날아간다.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Settings()
+        interval = try c.decodeIfPresent(Int.self, forKey: .interval) ?? d.interval
+        dayStart = try c.decodeIfPresent(Int.self, forKey: .dayStart) ?? d.dayStart
+        dayEnd   = try c.decodeIfPresent(Int.self, forKey: .dayEnd) ?? d.dayEnd
+        reviewAt = try c.decodeIfPresent(Int.self, forKey: .reviewAt) ?? d.reviewAt
+        weekend  = try c.decodeIfPresent(Bool.self, forKey: .weekend) ?? d.weekend
+        sound    = try c.decodeIfPresent(Bool.self, forKey: .sound) ?? d.sound
+        learned  = try c.decodeIfPresent([String: Category].self, forKey: .learned) ?? [:]
+    }
 }
 
 // MARK: - 라벨
@@ -174,7 +276,6 @@ extension Tag {
 enum Scale {
     static let energy = ["방전", "낮음", "보통", "좋음", "최상"]
     static let focus  = ["산만", "얕음", "보통", "깊음", "몰입"]
-    static let impact = ["낮음", "보통", "높음"]
 }
 
 // MARK: - 헬퍼
@@ -190,7 +291,7 @@ extension Color {
         )
     }
 
-    /// Picks the step that was validated against the surface actually in use.
+    /// 실제로 쓰이는 배경에 맞춰 검증된 단계를 고른다.
     init(light: Int, dark: Int) {
         self.init(UIColor { $0.userInterfaceStyle == .dark
             ? UIColor(Color(hex: dark))

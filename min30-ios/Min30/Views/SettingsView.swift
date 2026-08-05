@@ -5,8 +5,6 @@ struct SettingsView: View {
     @Environment(Store.self) private var store
 
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
-    @State private var newTagName = ""
-    @State private var newTagCategory: Category = .deep
     @State private var showWipeConfirm = false
 
     var body: some View {
@@ -54,33 +52,37 @@ struct SettingsView: View {
                 Text("알림에서 바로 기록")
             }
 
-            Section("간편 입력 태그") {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 7)], spacing: 7) {
-                    ForEach(store.settings.tags) { tag in
-                        TagButton(name: tag.name, category: tag.category) {
-                            store.settings.tags.removeAll { $0.id == tag.id }
-                            store.save()
-                            Task { await Notifier.shared.reschedule() }
+            Section("시간 분류 — 『원씽』 기준") {
+                ForEach(Category.allCases) { c in
+                    HStack(spacing: 11) {
+                        Image(systemName: c.symbol).frame(width: 20).foregroundStyle(c.color)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(c.title).font(.system(size: 14, weight: .medium))
+                            Text(c.blurb).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if c.buildsImpact {
+                            Text("임팩트").font(.system(size: 10))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(c.color.opacity(0.18), in: Capsule())
+                                .foregroundStyle(c.color)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 4)
+                Text("""
+                무엇을 했는지만 적으면 분류는 앱이 붙여요. 틀리면 한 번 고쳐 주세요 — \
+                그 표현은 다음부터 기억합니다. 관리할 태그 목록은 따로 없어요.
+                """)
+                .font(.system(size: 11.5)).foregroundStyle(.tertiary)
 
-                HStack {
-                    TextField("새 태그 이름", text: $newTagName)
-                    Picker("", selection: $newTagCategory) {
-                        ForEach(Category.allCases) { Text($0.title).tag($0) }
+                if !store.settings.learned.isEmpty {
+                    Button("배운 분류 \(store.settings.learned.count)개 지우기", role: .destructive) {
+                        store.settings.learned.removeAll()
+                        store.save()
                     }
-                    .labelsHidden()
-                    Button("추가") {
-                        store.rememberTag(newTagName, newTagCategory)
-                        newTagName = ""
-                        Task { await Notifier.shared.reschedule() }
-                    }
-                    .disabled(newTagName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .font(.system(size: 13))
                 }
-                Text("태그를 누르면 삭제돼요. 자세히 모드로 적은 활동은 자동으로 올라와요.")
-                    .font(.system(size: 11.5)).foregroundStyle(.tertiary)
             }
 
             Section("데이터") {

@@ -57,19 +57,20 @@ struct RootView: View {
                 .tag(3)
         }
         .overlay(alignment: .bottomTrailing) {
-            // Ideas don't wait for the alarm — reachable from every tab.
+            // 알람과 무관하게 언제든 열려야 하지만, 자리를 차지하면 안 된다.
+            // 아이콘만 남긴 작은 원.
             Button { showCapture = true } label: {
-                Label("아이디어", systemImage: "lightbulb.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(.horizontal, 18)
-                    .frame(height: 50)
-                    .background(Color.accentColor, in: Capsule())
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(Color.accentColor.opacity(0.92), in: Circle())
                     .foregroundStyle(.white)
-                    .shadow(radius: 8, y: 4)
+                    .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 16)
-            .padding(.bottom, 66)
+            .accessibilityLabel("아이디어 적기")
+            .padding(.trailing, 14)
+            .padding(.bottom, 60)
         }
         .sheet(isPresented: $showCapture) { CaptureSheet() }
     }
@@ -109,18 +110,17 @@ struct LogBlockIntent: AppIntent {
         store.reloadFromDisk()
         let day = store.logicalDay()
         let slot = store.currentSlot()
-        let cat = store.quickTags(limit: 40).first { $0.name == activity }?.category
+        let cat = store.autoClassify(activity, day: day)
         let prev = store.previousEntry(day: day, before: slot)
         store.put(day: day, slot: slot) {
             $0.activity = activity
             $0.category = cat
-            $0.impact = cat?.defaultImpact ?? 1
+            $0.impact = cat.legacyImpact
             $0.energy = prev?.energy ?? 0
             $0.focus = prev?.focus ?? 0
             $0.skipped = false
         }
-        store.rememberTag(activity, cat)
-        return .result(dialog: "\(Fmt.hhmm(slot)) 블록에 기록했어요.")
+        return .result(dialog: "\(Fmt.hhmm(slot)) 블록에 \(cat.title)으로 기록했어요.")
     }
 }
 

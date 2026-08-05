@@ -12,6 +12,7 @@ final class Store {
     private(set) var entries: [String: [Int: Entry]] = [:]   // day -> slot -> entry
     var ideas: [Idea] = []
     var reviews: [String: DayReview] = [:]
+    var oneThings: [String: String] = [:]      // 날짜 -> 그날의 원씽
     var settings = Settings()
 
     private let queue = DispatchQueue(label: "min30.store", qos: .userInitiated)
@@ -23,6 +24,7 @@ final class Store {
         var ideas: [Idea]
         var reviews: [String: DayReview]
         var settings: Settings
+        var oneThings: [String: String]?      // 날짜 → 그날의 원씽
     }
 
     private static var fileURL: URL {
@@ -43,6 +45,7 @@ final class Store {
         entries = snap.entries
         ideas = snap.ideas
         reviews = snap.reviews
+        oneThings = snap.oneThings ?? [:]
         settings = snap.settings
         stampLegacyIntervals()
     }
@@ -70,7 +73,8 @@ final class Store {
     }
 
     func save() {
-        let snap = Snapshot(entries: entries, ideas: ideas, reviews: reviews, settings: settings)
+        let snap = Snapshot(entries: entries, ideas: ideas, reviews: reviews,
+                            settings: settings, oneThings: oneThings)
         queue.async { [weak self] in
             do {
                 let data = try JSONEncoder().encode(snap)
@@ -171,46 +175,74 @@ final class Store {
         loggedEntries(day).last { $0.slot < slot }
     }
 
-    // MARK: 태그
+    // MARK: 오늘의 원씽
 
-    /// History leads, pinned tags fill the rest — after a week your own
-    /// vocabulary beats any default list.
-    func quickTags(limit: Int = 18) -> [Tag] {
-        var counts: [String: (n: Int, cat: Category?)] = [:]
-        let recentDays = entries.keys.sorted(by: >).prefix(14)
-        for day in recentDays {
-            for e in (entries[day] ?? [:]).values where e.isLogged {
-                var cur = counts[e.activity] ?? (0, e.category)
-                cur.n += 1
-                if cur.cat == nil { cur.cat = e.category }
-                counts[e.activity] = cur
-            }
-        }
-        var out: [Tag] = []
-        var seen = Set<String>()
-        for (name, v) in counts.sorted(by: { $0.value.n > $1.value.n }) {
-            out.append(Tag(name: name, category: v.cat ?? .shallow))
-            seen.insert(name)
-            if out.count >= limit { break }
-        }
-        for t in settings.tags where !seen.contains(t.name) {
-            out.append(t)
-            seen.insert(t.name)
-            if out.count >= limit { break }
-        }
-        return out
+    /// 『원씽』의 초점 질문에 대한 그날의 답. 이 문장과 맞아떨어지는 블록은
+    /// 자동으로 원씽으로 분류된다 — 분류가 곧 임팩트 판정이 되는 지점.
+    func oneThing(_ day: String) -> String { oneThings[day] ?? "" }
+
+    func setOneThing(_ text: String, for day: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { oneThings.removeValue(forKey: day) } else { oneThings[day] = t }
+        save()
     }
 
-    func rememberTag(_ name: String, _ category: Category?) {
-        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    // MARK: 자동 분류
+
+    /// 무엇을 했는지만 쓰면 분류는 앱이 정한다. 순서가 중요하다 —
+    /// 내가 고쳐준 것 > 오늘의 원씽 > 예전에 같은 걸 어떻게 넣었나 > 키워드.
+    func autoClassify(_ text: String, day: String) -> Category {
+        let n = AutoTag.norm(text)
+        guard !n.isEmpty else { return AutoTag.fallback }
+
+        if let learned = settings.learned[n] { return learned }
+
+        let one = AutoTag.norm(oneThing(day))
+        if !one.isEmpty, n.contains(one) || one.contains(n) { return .onething }
+
+        // 같은 활동을 예전에 직접 분류한 적이 있으면 그걸 따른다
+        if let past = mostRecentCategory(for: n) { return past }
+
+        return AutoTag.classify(text)
+    }
+
+    private func mostRecentCategory(for normalized: String) -> Category? {
+        for day in entries.keys.sorted(by: >).prefix(30) {
+            for e in (entries[day] ?? [:]).values.sorted(by: { $0.updatedAt > $1.updatedAt })
+            where e.isLogged && AutoTag.norm(e.activity) == normalized {
+                if let c = e.category { return c }
+            }
+        }
+        return nil
+    }
+
+    /// 자동 분류를 고쳤을 때만 부른다. 다음부터 같은 표현은 바로 맞춘다.
+    func learnCorrection(_ text: String, _ category: Category) {
+        let n = AutoTag.norm(text)
         guard !n.isEmpty else { return }
-        if let i = settings.tags.firstIndex(where: { $0.name == n }) {
-            if let c = category { settings.tags[i].category = c }
-        } else {
-            settings.tags.insert(Tag(name: n, category: category ?? .shallow), at: 0)
-            settings.tags = Array(settings.tags.prefix(60))
+        settings.learned[n] = category
+        // 같은 프로퍼티를 한 식 안에서 읽고 쓰면 배타적 접근 위반이다
+        if settings.learned.count > 300, let oldest = settings.learned.keys.first {
+            settings.learned.removeValue(forKey: oldest)
         }
         save()
+    }
+
+    /// 최근에 실제로 적은 활동들. 저장된 태그 목록이 아니라 기록에서 뽑는다 —
+    /// 쓴 것이 그대로 다음번 후보가 되고, 관리할 목록이 따로 생기지 않는다.
+    func recentActivities(limit: Int = 8) -> [(name: String, category: Category?)] {
+        var seen = Set<String>()
+        var out: [(String, Category?)] = []
+        for day in entries.keys.sorted(by: >).prefix(14) {
+            for e in (entries[day] ?? [:]).values.sorted(by: { $0.updatedAt > $1.updatedAt }) where e.isLogged {
+                let key = AutoTag.norm(e.activity)
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                out.append((e.activity, e.category))
+                if out.count >= limit { return out }
+            }
+        }
+        return out
     }
 
     // MARK: 아이디어
@@ -250,8 +282,10 @@ final class Store {
     struct DaySummary {
         var blocks = 0
         var loggedHours = 0.0
-        var impactHours = 0.0
+        var impactHours = 0.0      // 원씽 + 레버리지
+        var oneThingHours = 0.0
         var wasteHours = 0.0
+        var recoverHours = 0.0
         var energy = 0.0
         var focus = 0.0
         var coverage = 0
@@ -275,7 +309,8 @@ final class Store {
         let all = days.flatMap { loggedEntries($0) }
         var minsByCat: [Category?: Int] = [:]
         var nByCat: [Category?: Int] = [:]
-        var eSum = 0, eN = 0, fSum = 0, fN = 0, impactMins = 0, wasteMins = 0, totalMins = 0
+        var eSum = 0, eN = 0, fSum = 0, fN = 0
+        var impactMins = 0, oneThingMins = 0, wasteMins = 0, recoverMins = 0, totalMins = 0
         for x in all {
             let m = minutes(of: x)
             minsByCat[x.category, default: 0] += m
@@ -283,8 +318,11 @@ final class Store {
             totalMins += m
             if x.energy > 0 { eSum += x.energy; eN += 1 }
             if x.focus > 0 { fSum += x.focus; fN += 1 }
-            if x.impact == 2 { impactMins += m }
+            // 분류가 곧 임팩트 판정이다 — 따로 묻지 않는다
+            if x.buildsImpact { impactMins += m }
+            if x.category == .onething { oneThingMins += m }
             if x.category == .waste { wasteMins += m }
+            if x.category == .recover { recoverMins += m }
         }
         let total = all.count
 
@@ -312,7 +350,9 @@ final class Store {
             blocks: total,
             loggedHours: Double(totalMins) / 60,
             impactHours: Double(impactMins) / 60,
+            oneThingHours: Double(oneThingMins) / 60,
             wasteHours: Double(wasteMins) / 60,
+            recoverHours: Double(recoverMins) / 60,
             energy: eN > 0 ? Double(eSum) / Double(eN) : 0,
             focus: fN > 0 ? Double(fSum) / Double(fN) : 0,
             coverage: possible > 0 ? Int((Double(total) / Double(possible) * 100).rounded()) : 0,
@@ -369,7 +409,8 @@ final class Store {
     // MARK: 내보내기
 
     func exportJSON() -> Data? {
-        try? JSONEncoder().encode(Snapshot(entries: entries, ideas: ideas, reviews: reviews, settings: settings))
+        try? JSONEncoder().encode(Snapshot(entries: entries, ideas: ideas, reviews: reviews,
+                                           settings: settings, oneThings: oneThings))
     }
 
     func exportMarkdown(day: String) -> String {
@@ -388,7 +429,7 @@ final class Store {
             var line = "- `\(Fmt.hhmm(e.slot))` \(e.activity)"
             if let c = e.category { line += " _(\(c.title))_" }
             line += " — E\(e.energy > 0 ? String(e.energy) : "–")/F\(e.focus > 0 ? String(e.focus) : "–")"
-            if e.impact == 2 { line += " **임팩트**" }
+            if e.buildsImpact { line += " **임팩트**" }
             if !e.note.isEmpty { line += "\n    - " + e.note.replacingOccurrences(of: "\n", with: " ") }
             L.append(line)
         }
@@ -410,7 +451,7 @@ final class Store {
         for day in entries.keys.sorted() {
             for slot in (entries[day] ?? [:]).keys.sorted() {
                 guard let e = entries[day]?[slot], e.isLogged else { continue }
-                let impact = e.impact >= 0 && e.impact < 3 ? Scale.impact[e.impact] : ""
+                let impact = (e.category?.buildsImpact ?? false) ? "임팩트" : ""
                 lines.append([
                     day, Fmt.hhmm(slot), Fmt.hhmm(slot + minutes(of: e)),
                     q(e.activity), e.category?.title ?? "",
@@ -427,6 +468,7 @@ final class Store {
         entries = [:]
         ideas = []
         reviews = [:]
+        oneThings = [:]
         settings = Settings()
         save()
     }

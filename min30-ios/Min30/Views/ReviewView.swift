@@ -94,11 +94,12 @@ struct ReviewView: View {
             VStack(spacing: 4) {
                 Text(Fmt.hours(s.impactHours))
                     .font(.system(size: 52, weight: .bold))
-                Text("임팩트 높은 일에 쓴 시간")
+                Text("임팩트를 만든 시간 — 원씽 + 레버리지")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                 Text("전체 기록 \(Fmt.hours(s.loggedHours)) 중 \(s.impactPct)%"
-                     + (s.wasteHours > 0 ? " · 낭비로 표시한 시간 \(Fmt.hours(s.wasteHours))" : ""))
+                     + (s.oneThingHours > 0 ? " · 그중 원씽 \(Fmt.hours(s.oneThingHours))" : "")
+                     + (s.wasteHours > 0 ? " · 낭비 \(Fmt.hours(s.wasteHours))" : ""))
                     .font(.system(size: 12))
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
@@ -112,7 +113,7 @@ struct ReviewView: View {
             StatTile(label: "기록률", value: "\(s.coverage)", unit: "%")
             StatTile(label: "평균 에너지", value: s.energy > 0 ? String(format: "%.1f", s.energy) : "–", unit: "/5")
             StatTile(label: "평균 집중력", value: s.focus > 0 ? String(format: "%.1f", s.focus) : "–", unit: "/5")
-            StatTile(label: "아이디어", value: "\(s.ideaCount)", unit: "개")
+            StatTile(label: "회복", value: Fmt.hours(s.recoverHours))
         }
     }
 
@@ -137,7 +138,7 @@ struct ReviewView: View {
             let len = store.minutes(of: e)
             out.append(Band(id: e.slot, start: e.slot, end: e.slot + len - 2,   // 2분 = 마크 사이 여백
                             color: e.category?.color ?? Color.secondary, row: "활동"))
-            if e.impact == 2 {
+            if e.buildsImpact {
                 out.append(Band(id: e.slot + 100_000, start: e.slot, end: e.slot + len - 2,
                                 color: .green, row: "임팩트"))
             }
@@ -404,7 +405,13 @@ struct ReviewView: View {
             items.append(("📌", "가장 많이 한 건 \(top.title) — \(Fmt.hours(top.hours)), 전체의 \(top.pct)%."))
         }
         if let waste = s.rows.first(where: { $0.category == .waste }) {
-            items.append(("🧹", "낭비·산만이 \(Fmt.hours(waste.hours)) (\(waste.pct)%). 여기서 한 블록만 줄여도 \(store.settings.interval)분이 돌아와요."))
+            items.append(("🧹", "낭비가 \(Fmt.hours(waste.hours)) (\(waste.pct)%). 여기서 한 블록만 줄여도 \(store.settings.interval)분이 돌아와요."))
+        }
+        if s.oneThingHours == 0 && s.blocks >= 4 {
+            items.append(("🎯", "오늘 원씽으로 분류된 블록이 없어요. 『원씽』의 질문은 이거예요 — 이것만 하면 나머지가 쉬워지거나 필요 없어지는 그 하나는?"))
+        }
+        if s.recoverHours == 0 && s.blocks >= 8 {
+            items.append(("🌱", "회복 블록이 하나도 없어요. 원씽은 휴식을 먼저 캘린더에 박으라고 해요 — 성과의 반대가 아니라 조건이라서."))
         }
         if !weekScope, let w = store.bestFocusWindow(day) {
             items.append(("🎯", String(format: "최고 집중 구간은 %@–%@ (평균 %.1f). 내일 가장 중요한 일을 이 시간에 두세요.",
@@ -417,7 +424,7 @@ struct ReviewView: View {
             }
         }
         if s.impactHours == 0 && s.blocks >= 4 {
-            items.append(("⚠️", "임팩트 높음으로 표시한 블록이 없어요. 우선순위가 실제 시간으로 안 옮겨졌다는 신호일 수 있어요."))
+            items.append(("⚠️", "원씽도 레버리지도 없는 하루였어요. 우선순위가 실제 시간으로 옮겨지지 않았다는 신호일 수 있어요."))
         }
 
         return Group {

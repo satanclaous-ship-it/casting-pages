@@ -50,10 +50,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// are always the things you actually do.
     func registerCategories() {
         let store = Store.shared
-        // Four is what iOS realistically shows before collapsing into a list.
-        let topTags = store.quickTags(limit: 3)
+        // 저장된 태그 목록이 아니라 실제로 최근에 적은 것들. 관리할 목록이
+        // 따로 생기지 않고, 잠금화면 버튼이 늘 지금 하는 일을 가리킨다.
+        let recent = store.recentActivities(limit: 3)
 
-        var actions: [UNNotificationAction] = topTags.map {
+        var actions: [UNNotificationAction] = recent.map {
             UNNotificationAction(identifier: ID.tagPrefix + $0.name,
                                  title: $0.name,
                                  options: [])
@@ -253,19 +254,18 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 // The whole point of going native: a lock-screen tap that
                 // records the block without the app ever coming to the front.
                 let name = String(a.dropFirst(ID.tagPrefix.count))
-                let cat = store.quickTags(limit: 40).first { $0.name == name }?.category
+                let cat = store.autoClassify(name, day: day)
                 let prev = store.previousEntry(day: day, before: target)
                 store.put(day: day, slot: target) {
                     $0.activity = name
                     $0.category = cat
-                    $0.impact = cat?.defaultImpact ?? 1
+                    $0.impact = cat.legacyImpact
                     // energy/focus barely move in 30 minutes — carry them, and
                     // the review screen flags anything left unset
                     $0.energy = prev?.energy ?? 0
                     $0.focus = prev?.focus ?? 0
                     $0.skipped = false
                 }
-                store.rememberTag(name, cat)
 
             case UNNotificationDefaultActionIdentifier:
                 if info["review"] as? Bool == true { Router.shared.openReview() }
