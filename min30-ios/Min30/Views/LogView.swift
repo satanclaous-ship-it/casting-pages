@@ -29,7 +29,10 @@ struct LogView: View {
     @State private var toast: String?
     @FocusState private var activityFocused: Bool
 
-    private let tick = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
+    /// `@State` 여야 한다. `let` 으로 두면 뷰 구조체가 다시 만들어질 때마다 —
+    /// SwiftUI 에서는 수시로 일어난다 — 새 타이머 퍼블리셔가 생기고 onReceive 가
+    /// 매번 구독을 갈아치운다. 한 번 만들어 두고 계속 쓴다.
+    @State private var tick = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
     var body: some View {
         let _ = Diag.beat("LogView.body")
