@@ -10,7 +10,3 @@ permalink: /:title/
 # Files to exclude from Jekyll build
 exclude:
   - README.md
-  - worker/        # Cloudflare Worker source — deployed separately, not a page
-
-# tracker/ needs no config: its files carry no front matter, so Jekyll
-# copies them verbatim instead of rendering them as pages.

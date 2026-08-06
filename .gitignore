@@ -1,7 +1,0 @@
-
-# setup-mac.sh 가 만드는 빌드 산출물
-min30-ios/.dd/
-min30-ios/build.log
-min30-ios/device-build.log
-min30-ios/errors.txt
-min30-ios/warnings.txt
