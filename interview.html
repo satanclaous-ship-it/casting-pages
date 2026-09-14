@@ -133,7 +133,7 @@
 <body>
 <header>
   <h1>북극성 인터뷰</h1>
-  <p>열두 번의 질문으로, 원하는 것을 손에 잡히는 문장으로</p>
+  <p id="subtitle">질문 여덟 개, 약 10분 — 매일 아침과 밤에 읽을 문장이 만들어져요</p>
 </header>
 
 <main id="log"></main>
@@ -167,6 +167,53 @@
 
   var params = new URLSearchParams(location.search);
   var language = params.get("lang") === "en" ? "English" : "Korean";
+  var EN = language === "English";
+  // Chrome strings only — the interview itself is generated in the language above.
+  var T = EN ? {
+    title: "North Star Interview",
+    subtitle: "Eight questions, about ten minutes \u2014 the reading you will speak every morning and night",
+    placeholder: "Write however it comes",
+    send: "Send",
+    starting: "Starting\u2026",
+    listening: "Listening\u2026",
+    retry: "Try again",
+    copy: "Copy the whole conversation",
+    reset: "Start over",
+    endedPlaceholder: "The interview is over",
+    done: "The interview is over.",
+    doneMins: function (m) { return "The interview is over (about " + m + " min)."; },
+    copied: "Copied. Send it over when you can.",
+    confirmReset: "Start over from the beginning? This conversation will be gone.",
+    header: "[North Star Interview \u2014 web]", started: "Started: ", finished: "Finished: ", took: "Took: about ", min: " min", turns: "Turns: ", me: "\u2500\u2500 me \u2500\u2500", ai: "\u2500\u2500 interview \u2500\u2500"
+  } : {
+    title: "\ubd81\uadf9\uc131 \uc778\ud130\ubdf0",
+    subtitle: "\uc9c8\ubb38 \uc5ec\ub35f \uac1c, \uc57d 10\ubd84 \u2014 \ub9e4\uc77c \uc544\uce68\uacfc \ubc24\uc5d0 \uc77d\uc744 \ubb38\uc7a5\uc774 \ub9cc\ub4e4\uc5b4\uc838\uc694",
+    placeholder: "\ud3b8\ud558\uac8c \uc801\uc5b4 \uc8fc\uc138\uc694",
+    send: "\ubcf4\ub0b4\uae30",
+    starting: "\uc2dc\uc791\ud558\ub294 \uc911\uc774\uc5d0\uc694\u2026",
+    listening: "\ub4e3\uace0 \uc788\uc5b4\uc694\u2026",
+    retry: "\ub2e4\uc2dc \uc2dc\ub3c4",
+    copy: "\ub300\ud654 \uc804\uccb4 \ubcf5\uc0ac",
+    reset: "\ucc98\uc74c\ubd80\ud130",
+    endedPlaceholder: "\uc778\ud130\ubdf0\uac00 \ub05d\ub0ac\uc5b4\uc694",
+    done: "\uc778\ud130\ubdf0\uac00 \ub05d\ub0ac\uc5b4\uc694.",
+    doneMins: function (m) { return "\uc778\ud130\ubdf0\uac00 \ub05d\ub0ac\uc5b4\uc694 (\uc57d " + m + "\ubd84)."; },
+    copied: "\ubcf5\uc0ac\ub410\uc5b4\uc694. \ubcf4\ub0b4\uc8fc\uc2dc\uba74 \ub3fc\uc694.",
+    confirmReset: "\ucc98\uc74c\ubd80\ud130 \ub2e4\uc2dc \uc2dc\uc791\ud560\uae4c\uc694? \uc9c0\uae08 \ub300\ud654\ub294 \uc0ac\ub77c\uc838\uc694.",
+    header: "[\ubd81\uadf9\uc131 \uc778\ud130\ubdf0 \u2014 \uc6f9]", started: "\uc2dc\uc791: ", finished: "\uc885\ub8cc: ", took: "\uc18c\uc694: \uc57d ", min: "\ubd84", turns: "\ud134 \uc218: ", me: "\u2500\u2500 \ub098 \u2500\u2500", ai: "\u2500\u2500 \uc778\ud130\ubdf0 \u2500\u2500"
+  };
+  if (EN) {
+    document.documentElement.lang = "en";
+    document.title = T.title;
+    document.querySelector("header h1").textContent = T.title;
+    document.getElementById("subtitle").textContent = T.subtitle;
+    input.placeholder = T.placeholder;
+    send.textContent = T.send;
+    status.textContent = T.starting;
+    retry.textContent = T.retry;
+    document.getElementById("copy").textContent = T.copy;
+    document.getElementById("reset").textContent = T.reset;
+  }
 
   var state = { messages: [], startedAt: null, finishedAt: null, done: false };
 
@@ -206,7 +253,7 @@
     send.disabled = busy || state.done;
     input.disabled = busy || state.done;
     if (state.done) {
-      input.placeholder = "인터뷰가 끝났어요";
+      input.placeholder = T.endedPlaceholder;
     }
   }
 
@@ -218,24 +265,22 @@
   function showDone() {
     doneBox.classList.remove("hidden");
     var mins = minutesSoFar();
-    doneText.textContent = mins === null
-      ? "인터뷰가 끝났어요. 카드를 캡처해 두셔도 좋아요."
-      : "인터뷰가 끝났어요 (약 " + mins + "분). 카드를 캡처해 두셔도 좋아요.";
+    doneText.textContent = mins === null ? T.done : T.doneMins(mins);
     status.textContent = "";
   }
 
   function transcript() {
-    var out = ["[북극성 인터뷰 — 웹]"];
-    if (state.startedAt) out.push("시작: " + new Date(state.startedAt).toLocaleString("ko-KR"));
+    var out = [T.header];
+    if (state.startedAt) out.push(T.started + new Date(state.startedAt).toLocaleString(EN ? "en-US" : "ko-KR"));
     if (state.finishedAt) {
-      out.push("종료: " + new Date(state.finishedAt).toLocaleString("ko-KR"));
-      out.push("소요: 약 " + minutesSoFar() + "분");
+      out.push(T.finished + new Date(state.finishedAt).toLocaleString(EN ? "en-US" : "ko-KR"));
+      out.push(T.took + minutesSoFar() + T.min);
     }
-    out.push("턴 수: " + state.messages.length);
+    out.push(T.turns + state.messages.length);
     out.push("");
     for (var i = 0; i < state.messages.length; i++) {
       var m = state.messages[i];
-      out.push((m.role === "user" ? "── 나 ──" : "── 인터뷰 ──"));
+      out.push((m.role === "user" ? T.me : T.ai));
       out.push(m.content);
       out.push("");
     }
@@ -244,7 +289,7 @@
 
   document.getElementById("copy").addEventListener("click", function () {
     var text = transcript();
-    var ok = function () { doneText.textContent = "복사됐어요. 보내주시면 돼요."; };
+    var ok = function () { doneText.textContent = T.copied; };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text, ok); });
     } else {
@@ -264,7 +309,7 @@
   }
 
   document.getElementById("reset").addEventListener("click", function () {
-    if (!confirm("처음부터 다시 시작할까요? 지금 대화는 사라져요.")) return;
+    if (!confirm(T.confirmReset)) return;
     state = { messages: [], startedAt: null, finishedAt: null, done: false };
     save();
     location.reload();
@@ -309,7 +354,7 @@
   function turn() {
     setBusy(true);
     retry.classList.add("hidden");
-    status.textContent = "듣고 있어요…";
+    status.textContent = T.listening;
 
     var el = bubble("assistant", "");
     var caret = document.createElement("span");
