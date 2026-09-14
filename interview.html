@@ -79,6 +79,20 @@
     margin: 0 auto;
   }
   .row { display: flex; gap: 10px; align-items: flex-end; }
+  .modes { display: flex; gap: 6px; margin-bottom: 10px; }
+  .modes button {
+    flex: 1; padding: 9px 10px; font-size: 14px;
+    background: var(--you); color: var(--dim); border: 1px solid var(--line);
+  }
+  .modes button.on { background: var(--accent); color: #0d0f14; border-color: var(--accent); font-weight: 600; }
+  .modes button:disabled { opacity: 0.45; }
+  #mic {
+    width: 100%; padding: 18px 14px; font-size: 17px; border-radius: 14px;
+    background: var(--you); color: var(--ink); border: 1px solid var(--line);
+  }
+  #mic.listening { background: #3b1f24; border-color: #d2555f; color: #ffd7db; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(210,85,95,0.18); } }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 6px; text-align: center; }
   textarea {
     flex: 1;
     resize: none;
@@ -144,6 +158,14 @@
     <button id="copy" class="ghost">대화 전체 복사</button>
     <button id="reset" class="ghost">처음부터</button>
   </div>
+  <div class="modes" id="modes">
+    <button id="modeType" class="on" type="button">⌨️ 타이핑</button>
+    <button id="modeVoice" type="button">🎤 말하기</button>
+  </div>
+  <div id="voiceBox" class="hidden">
+    <button id="mic" type="button">🎤 눌러서 말하기</button>
+    <div class="hint" id="voiceHint">말이 끝나면 다시 눌러요. 글로 바뀐 내용을 확인하고 보내기.</div>
+  </div>
   <div class="row">
     <textarea id="input" rows="1" placeholder="편하게 적어 주세요" autocomplete="off"></textarea>
     <button id="send" disabled>보내기</button>
@@ -183,6 +205,11 @@
     done: "The interview is over.",
     doneMins: function (m) { return "The interview is over (about " + m + " min)."; },
     copied: "Copied. Send it over when you can.",
+    modeType: "\u2328\ufe0f Type", modeVoice: "\ud83c\udfa4 Speak",
+    micIdle: "\ud83c\udfa4 Tap to speak", micOn: "\u25cf Listening\u2026 tap again when you are done",
+    voiceHint: "Tap again when you finish. Check the text, then send.",
+    voiceUnsupported: "Voice input is not available in this browser \u2014 open the page in Safari or Chrome.",
+    voiceDenied: "Microphone permission was declined. Typing still works.",
     confirmReset: "Start over from the beginning? This conversation will be gone.",
     header: "[North Star Interview \u2014 web]", started: "Started: ", finished: "Finished: ", took: "Took: about ", min: " min", turns: "Turns: ", me: "\u2500\u2500 me \u2500\u2500", ai: "\u2500\u2500 interview \u2500\u2500"
   } : {
@@ -199,6 +226,11 @@
     done: "\uc778\ud130\ubdf0\uac00 \ub05d\ub0ac\uc5b4\uc694.",
     doneMins: function (m) { return "\uc778\ud130\ubdf0\uac00 \ub05d\ub0ac\uc5b4\uc694 (\uc57d " + m + "\ubd84)."; },
     copied: "\ubcf5\uc0ac\ub410\uc5b4\uc694. \ubcf4\ub0b4\uc8fc\uc2dc\uba74 \ub3fc\uc694.",
+    modeType: "\u2328\ufe0f \ud0c0\uc774\ud551", modeVoice: "\ud83c\udfa4 \ub9d0\ud558\uae30",
+    micIdle: "\ud83c\udfa4 \ub20c\ub7ec\uc11c \ub9d0\ud558\uae30", micOn: "\u25cf \ub4e3\ub294 \uc911\u2026 \ub2e4 \ub9d0\ud558\uba74 \ub2e4\uc2dc \ub20c\ub7ec\uc694",
+    voiceHint: "\ub9d0\uc774 \ub05d\ub098\uba74 \ub2e4\uc2dc \ub20c\ub7ec\uc694. \uae00\ub85c \ubc14\ub01c \ub0b4\uc6a9\uc744 \ud655\uc778\ud558\uace0 \ubcf4\ub0b4\uae30.",
+    voiceUnsupported: "\uc774 \ube0c\ub77c\uc6b0\uc800\ub294 \uc74c\uc131 \uc785\ub825\uc774 \uc548 \ub3fc\uc694 \u2014 \uc0ac\ud30c\ub9ac\ub098 \ud06c\ub86c\uc73c\ub85c \uc5f4\uc5b4 \uc8fc\uc138\uc694.",
+    voiceDenied: "\ub9c8\uc774\ud06c \uad8c\ud55c\uc774 \uac70\ubd80\ub410\uc5b4\uc694. \ud0c0\uc774\ud551\uc740 \uadf8\ub300\ub85c \ub3fc\uc694.",
     confirmReset: "\ucc98\uc74c\ubd80\ud130 \ub2e4\uc2dc \uc2dc\uc791\ud560\uae4c\uc694? \uc9c0\uae08 \ub300\ud654\ub294 \uc0ac\ub77c\uc838\uc694.",
     header: "[\ubd81\uadf9\uc131 \uc778\ud130\ubdf0 \u2014 \uc6f9]", started: "\uc2dc\uc791: ", finished: "\uc885\ub8cc: ", took: "\uc18c\uc694: \uc57d ", min: "\ubd84", turns: "\ud134 \uc218: ", me: "\u2500\u2500 \ub098 \u2500\u2500", ai: "\u2500\u2500 \uc778\ud130\ubdf0 \u2500\u2500"
   };
@@ -315,6 +347,81 @@
     location.reload();
   });
 
+  // ── Input mode: type or speak ─────────────────────────────────────────
+  // Speech goes INTO the textarea, never straight to the server: the customer
+  // reads what the recognizer heard and presses send — a misheard number in a
+  // wish would otherwise be planted as theirs.
+  var modeType = document.getElementById("modeType");
+  var modeVoice = document.getElementById("modeVoice");
+  var voiceBox = document.getElementById("voiceBox");
+  var mic = document.getElementById("mic");
+  var voiceHint = document.getElementById("voiceHint");
+  var MODE_KEY = KEY + ":mode";
+  var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recognizer = null, listening = false, baseText = "";
+
+  modeType.textContent = T.modeType;
+  modeVoice.textContent = T.modeVoice;
+  mic.textContent = T.micIdle;
+  voiceHint.textContent = T.voiceHint;
+  if (!Recognition) { modeVoice.disabled = true; modeVoice.title = T.voiceUnsupported; }
+
+  function setMode(mode) {
+    var voice = mode === "voice" && Recognition;
+    modeVoice.classList.toggle("on", !!voice);
+    modeType.classList.toggle("on", !voice);
+    voiceBox.classList.toggle("hidden", !voice);
+    input.placeholder = voice ? T.voiceHint : T.placeholder;
+    if (!voice) stopListening();
+    try { localStorage.setItem(MODE_KEY, voice ? "voice" : "type"); } catch (e) {}
+  }
+  modeType.addEventListener("click", function () { setMode("type"); });
+  modeVoice.addEventListener("click", function () {
+    if (!Recognition) { status.textContent = T.voiceUnsupported; return; }
+    setMode("voice");
+  });
+
+  function stopListening() {
+    if (recognizer && listening) { try { recognizer.stop(); } catch (e) {} }
+    listening = false;
+    mic.classList.remove("listening");
+    mic.textContent = T.micIdle;
+  }
+
+  function startListening() {
+    if (send.disabled && state.done) return;
+    recognizer = new Recognition();
+    recognizer.lang = EN ? "en-US" : "ko-KR";
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
+    baseText = input.value ? input.value.replace(/\s+$/, "") + " " : "";
+    recognizer.onresult = function (e) {
+      var finalText = "", interim = "";
+      for (var i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      input.value = baseText + finalText + interim;
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + "px";
+    };
+    recognizer.onerror = function (e) {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") status.textContent = T.voiceDenied;
+      stopListening();
+    };
+    recognizer.onend = function () { if (listening) stopListening(); };
+    try { recognizer.start(); } catch (e) { stopListening(); return; }
+    listening = true;
+    mic.classList.add("listening");
+    mic.textContent = T.micOn;
+  }
+
+  mic.addEventListener("click", function () { listening ? stopListening() : startListening(); });
+
+  var savedMode = null;
+  try { savedMode = localStorage.getItem(MODE_KEY); } catch (e) {}
+  setMode(savedMode === "voice" ? "voice" : "type");
+
   input.addEventListener("input", function () {
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + "px";
@@ -330,6 +437,7 @@
   send.addEventListener("click", submit);
 
   function submit() {
+    stopListening();
     var text = input.value.trim();
     if (!text || send.disabled) return;
     input.value = "";
