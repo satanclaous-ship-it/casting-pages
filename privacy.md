@@ -7,7 +7,7 @@ permalink: /privacy/
 
 **Effective: October 11, 2026** · **Previous version: effective May 10, 2026**
 
-> This policy is also published at https://getcasting.app/en/privacy/ — operated by CheonJiIn (천지인).
+> This policy is also published at https://getcasting.app/privacy/ — operated by CheonJiIn (천지인).
 
 CheonJiIn (천지인, “we”) operates the Casting iPhone app (“the App”) and the getcasting.app website (“the Site”), and builds them to handle as little personal information as possible. We do not sell your data, we use no third-party advertising or behavioral analytics SDKs, and we do not send voice recordings to any server. This policy explains, in line with South Korea’s Personal Information Protection Act, what we process and why, how long we keep it, who processes it for us (including outside Korea), and how you can exercise your rights.
 
@@ -19,7 +19,7 @@ CheonJiIn (천지인, “we”) operates the Casting iPhone app (“the App”) 
 
 ## 2. No account, and the per-install identifier
 
-The version of the App being prepared for release has no sign-up and does not collect your name, email address or account credentials. What we do handle is tied to an anonymous per-install identifier created at random on your device when you first open the App; deleting the App resets it.
+The current App Store version (v1.0) has no sign-up and does not collect your name, email address or account credentials. What we do handle is tied to an anonymous per-install identifier created at random on your device when you first open the App; deleting the App resets it.
 
 ## 3. Purposes, data collected and retention
 
@@ -29,7 +29,7 @@ We do not collect payment information, voice, your name, contacts, location, pho
 - Improving the service (learning whether the ritual becomes a habit) — the anonymous identifier and usage events: collected automatically while you use the App and kept while they remain useful for this purpose.
 - Fixing crashes — device model, OS and app version, and the stack trace at the time of a crash: collected automatically when a crash happens and kept while needed to fix it.
 - Answering your messages — your email address and message: collected when you email us and deleted promptly once handled (unless a law requires us to keep it).
-- Composing personal affirmations (in development, see section 8) — the text of answers you enter in the interview: processed only if you consent.
+- Composing personal affirmations (planned for version 2, see section 8) — the text of answers you enter in the interview: processed only if you consent.
 
 ## 4. What stays on your device
 
@@ -55,14 +55,14 @@ The App records a small set of events with the anonymous per-install identifier 
 
 We use Sentry for crash diagnostics only: stack trace, device model, OS and app version. It contains no personal identifiers and nothing you wrote or said.
 
-## 8. AI features — “Words that know you” (in development)
+## 8. AI features — “Words that know you” (planned for version 2)
 
-“Words that know you” is a feature under development and is not part of the version being prepared for release. Before it ships we will update this policy and tell you in the App. The current design is:
+The current App Store version (v1.0) has no AI features. “Words that know you” is planned for version 2, scheduled for October 2026. Before it ships in the App we will update this policy and tell you in the App. The current design is:
 
 - The text of answers you type or dictate into the interview is sent to Anthropic, PBC’s Claude API to help compose your personal affirmations.
 - Before your first answer is sent, we tell you it goes to an AI service and ask for your explicit consent.
 - Your voice is not sent. The App holds no API key; it calls a server function operated by us.
-- In this feature, the text you enter passes through our server to Anthropic.
+- A web prototype of the same interview, used for field testing, works the same way: text you enter there passes through our server to Anthropic.
 
 ## 9. The Site, and cookies
 
@@ -76,7 +76,7 @@ We use the providers below to run the service and do not give personal informati
 - Sentry — crash diagnostics (device model, OS and app version, stack trace). Processing region: United States. Sent over an encrypted connection when a crash happens.
 - Cloudflare — serves the Site. Connection records (such as IP addresses) are processed on its global network.
 - Apple (iCloud/CloudKit, subscription payments) — stores saved affirmations and handles payment under Apple’s own privacy policy; we cannot access that data.
-- Anthropic, PBC — processes interview text you consented to send in the AI feature under development. Processing region: United States. Not applicable before that feature ships.
+- Anthropic, PBC — processes the text you enter in the interview web prototype and, once version 2 ships, interview text you consent to send from the App. Processing region: United States.
 
 ## 11. Retention and deletion
 
