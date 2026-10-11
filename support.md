@@ -9,7 +9,7 @@ We're a small team building Casting with care. If you need help, have feedback, 
 
 ## Contact
 
-**Email**: [satanclaous@gmail.com](mailto:satanclaous@gmail.com)
+**Email**: [junghoon@getcasting.app](mailto:junghoon@getcasting.app)
 
 We respond within 1–2 business days.
 
@@ -22,7 +22,7 @@ Casting is a daily spoken-affirmation ritual. You speak affirmations out loud to
 The ritual is *spoken*. The App listens for your voice during the affirmation so it can recognize when you've completed each line. Voice processing happens entirely on your device — your voice never leaves your iPhone.
 
 ### How do I delete my account and data?
-Email us at [satanclaous@gmail.com](mailto:satanclaous@gmail.com) with the subject "Delete my account." We delete your data within 30 days of your request.
+Email us at [junghoon@getcasting.app](mailto:junghoon@getcasting.app) with the subject "Delete my account." We delete your data within 30 days of your request.
 
 ### What devices does Casting support?
 Casting requires iOS 26 or later. iPhone is the primary supported device.
@@ -42,5 +42,5 @@ This helps us reproduce and fix it quickly.
 
 ## More
 
-- [Privacy Policy](/casting-pages/privacy/)
+- [Privacy Policy](/casting-pages/privacy/) · [개인정보처리방침](/casting-pages/privacy-ko/)
 - [About](/casting-pages/)

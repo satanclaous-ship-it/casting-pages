@@ -5,155 +5,111 @@ permalink: /privacy/
 
 # Privacy Policy
 
-**Effective date**: May 10, 2026
-**Last updated**: August 13, 2026 (v1.0 submission pass — favorites moved to your
-private iCloud; subscriptions added; removed the personalized-affirmation,
-AI-provider, and device-attestation sections, since that feature does not ship
-in v1.0)
+**Effective: October 11, 2026** · **Previous version: effective May 10, 2026**
 
-This Privacy Policy describes how Casting ("we," "us," or "our") collects, uses, and protects your information when you use the Casting iOS app ("the App").
+> This policy is also published at https://getcasting.app/en/privacy/ — operated by CheonJiIn (천지인).
 
-We designed Casting to do the absolute minimum needed to make the ritual work. We do not sell your data. We do not use third-party advertising or behavioral analytics SDKs. We do not transmit your voice recordings to any server.
+CheonJiIn (천지인, “we”) operates the Casting iPhone app (“the App”) and the getcasting.app website (“the Site”), and builds them to handle as little personal information as possible. We do not sell your data, we use no third-party advertising or behavioral analytics SDKs, and we do not send voice recordings to any server. This policy explains, in line with South Korea’s Personal Information Protection Act, what we process and why, how long we keep it, who processes it for us (including outside Korea), and how you can exercise your rights.
 
-## 1. Information We Collect
+## 1. Who is responsible
 
-### No account, no email
+- Business: CheonJiIn (천지인) — sole proprietorship in South Korea, business registration no. 708-32-01900
+- Representative and privacy officer: Jung Hoon Han (한정훈)
+- Email: junghoon@getcasting.app (questions and access/deletion requests)
 
-**Casting has no sign-in.** We do not collect your name, your email address, or
-any account credentials. Everything we do collect is tied to an anonymous
-per-install identifier — a random value created when you first open the App and
-stored on your device. Deleting the App resets it.
+## 2. No account, and the per-install identifier
 
-### Stored on your device only
+The version of the App being prepared for release has no sign-up and does not collect your name, email address or account credentials. What we do handle is tied to an anonymous per-install identifier created at random on your device when you first open the App; deleting the App resets it.
 
-The following never leaves your iPhone, and we cannot see it:
+## 3. Purposes, data collected and retention
 
-- Your alarm times, recurrence, sound, and topic settings
-- Your ritual progress and completion history
-- The affirmations shown to you during the ritual
+We do not collect payment information, voice, your name, contacts, location, photos or health data.
 
-### Saved affirmations — your private iCloud
+- Providing alarms and the ritual — alarm settings, progress and completion history, the affirmations shown: stored only on your iPhone; we do not collect them.
+- Improving the service (learning whether the ritual becomes a habit) — the anonymous identifier and usage events: collected automatically while you use the App and kept while they remain useful for this purpose.
+- Fixing crashes — device model, OS and app version, and the stack trace at the time of a crash: collected automatically when a crash happens and kept while needed to fix it.
+- Answering your messages — your email address and message: collected when you email us and deleted promptly once handled (unless a law requires us to keep it).
+- Composing personal affirmations (in development, see section 8) — the text of answers you enter in the interview: processed only if you consent.
 
-When you save an affirmation, it is stored in **your own private iCloud
-database** (Apple's CloudKit), under your Apple Account, so your saved
-affirmations follow you to a new iPhone.
+## 4. What stays on your device
 
-This is a *private* database. **We have no access to it.** We cannot read, list,
-export, or delete what it contains — only your devices, signed in to your Apple
-Account, can. If you sign out of iCloud or disable iCloud for Casting, saving
-still works; it simply stays on that one device. See
-[Apple's privacy policy](https://www.apple.com/legal/privacy/).
+The following never leaves your iPhone and we cannot see it.
 
-### Subscription
+- Alarm times, recurrence and sound settings
+- Ritual progress and completion history
+- The affirmations shown during the ritual
+- Voice: the microphone is used only to listen while you speak an affirmation, processed on-device by Apple’s speech recognition. We do not record, store or transmit your voice.
+- Calendar (optional): if you allow it, only the titles of upcoming events are read on the device to show your day; nothing is transmitted.
 
-Casting offers an optional paid subscription. **Purchases are handled entirely
-by Apple.** We never see or receive your payment method, card number, billing
-address, or Apple Account. The App only asks your device whether an active
-subscription exists, and that answer stays on your device — we do not transmit,
-log, or store your purchase history on our servers. Billing questions and
-cancellations are managed in your Apple Account settings.
+## 5. Saved affirmations — your private iCloud
 
-### Voice
+When you save an affirmation it is stored in your own private iCloud (CloudKit) database under your Apple Account. Only you can reach it; we cannot read, list or delete it.
 
-Casting requires microphone access to listen for spoken affirmations during the ritual. Voice processing happens **entirely on your device** using Apple's on-device speech recognition. **We do not record, store, or transmit your voice to any server.** Voice data never leaves your iPhone.
+## 6. Subscription payments
 
-### Calendar (optional)
+Paid subscriptions are handled entirely by Apple. We never receive your payment method, card number, billing address or Apple Account; the App only asks your device whether an active subscription exists.
 
-If you grant calendar access, Casting reads your **upcoming event titles only**, to show what your day holds as you enter the ritual. We do not read attendees, notes, locations, descriptions, recurrence rules, or past events. **Calendar data is processed entirely on your device and never transmitted to our servers.** You can deny or revoke calendar access at any time in iOS Settings — the App still works without it.
+## 7. Anonymous usage events and crash diagnostics
 
-### Crash and performance diagnostics
+The App records a small set of events with the anonymous per-install identifier to our own Supabase database (app opened, alarm set or fired, ritual started or finished or the stage where it stopped, whether an affirmation was shown or saved, whether a ritual was spoken or typed, and similar). These events contain no name, voice, transcript, text you wrote, or advertising identifier.
 
-We use **Sentry** for crash and performance monitoring only. When the App crashes or encounters an unhandled error, Sentry sends a diagnostic report containing the stack trace, device model, OS version, and App version. This report contains **no personal information, no behavioral analytics, no advertising identifiers, and no content you wrote or spoke**, and is not joined to the identifier used elsewhere in this policy. It is used solely to find and fix bugs. See [Sentry's privacy policy](https://sentry.io/privacy/).
+We use Sentry for crash diagnostics only: stack trace, device model, OS and app version. It contains no personal identifiers and nothing you wrote or said.
 
-### Anonymous usage events
+## 8. AI features — “Words that know you” (in development)
 
-To understand whether the ritual is actually forming a daily habit for real users, the App records a small set of anonymous events to our own Supabase backend:
+“Words that know you” is a feature under development and is not part of the version being prepared for release. Before it ships we will update this policy and tell you in the App. The current design is:
 
-- **Lifecycle**: app opened, onboarding completed, alarm set, alarm fired,
-  ritual started, ritual completed or the stage you stopped at (trap / prep /
-  speak / grounding), star placed, tapping the Personalize entry point
-- **Alarm follow-through**: whether a follow-up alarm was armed and reached
-  you, whether a ritual was left unfinished, and whether a completed ritual was
-  spoken or typed
-- **Affirmation engagement**: which affirmations were shown, skipped, dwelled
-  on, saved, or unsaved, and how long they were on screen
+- The text of answers you type or dictate into the interview is sent to Anthropic, PBC’s Claude API to help compose your personal affirmations.
+- Before your first answer is sent, we tell you it goes to an AI service and ask for your explicit consent.
+- Your voice is not sent. The App holds no API key; it calls a server function operated by us.
+- In this feature, the text you enter passes through our server to Anthropic.
 
-Each event carries only the **anonymous per-install identifier**, the event name, a timestamp, and — where noted above — a short label such as the stage you stopped at or whether you spoke or typed. **No third-party analytics SDK is used** — these events go directly to our own Supabase database, never to Google Analytics, Mixpanel, Amplitude, or any other behavioral analytics vendor. The events contain **no name, no voice, no transcript, no affirmation text you wrote, no advertising identifier, and no device serial.**
+## 9. The Site, and cookies
 
-We use this data to answer one question: do people repeat the ritual, and where do they drop off? It is not used for advertising or sale.
+The Site has no cookies, sign-up, login, advertising or analytics tools and does not collect behavioral data. It is served through Cloudflare, which may process ordinary connection records such as IP addresses to run the web service. If you email us, we use the address and message you send to reply.
 
-## 2. Information We Do NOT Collect
+## 10. Processors and processing outside Korea
 
-- We do **not** ask for or store your name, email address, or any account
-- We do **not** receive your payment details, card number, or purchase history
-- We do **not** have access to the affirmations you save — they live in your private iCloud
-- We do **not** use any third-party behavioral analytics SDK (no Google Analytics, no Mixpanel, no Amplitude, no Firebase Analytics)
-- We do **not** use advertising SDKs or tracking
-- We do **not** collect device identifiers for advertising (IDFA)
-- We do **not** access your contacts, photos, location, or health data
-- We do **not** record or transmit audio
-- We do **not** transmit your calendar events off your device
-- We do **not** send your personal information to any AI or machine-learning service
+We use the providers below to run the service and do not give personal information to third parties for advertising, marketing or sale. These providers process data outside South Korea.
 
-## 3. How We Use Your Information
+- Supabase — stores the anonymous identifier and usage events and serves affirmation content. Storage region: Australia (Sydney). Sent over an encrypted connection while you use the App.
+- Sentry — crash diagnostics (device model, OS and app version, stack trace). Processing region: United States. Sent over an encrypted connection when a crash happens.
+- Cloudflare — serves the Site. Connection records (such as IP addresses) are processed on its global network.
+- Apple (iCloud/CloudKit, subscription payments) — stores saved affirmations and handles payment under Apple’s own privacy policy; we cannot access that data.
+- Anthropic, PBC — processes interview text you consented to send in the AI feature under development. Processing region: United States. Not applicable before that feature ships.
 
-We use the information we collect to:
-- Keep your saved affirmations available across your own devices
-- Understand whether the ritual works, so we can improve it
-- Find and fix crashes
-- Provide the subscription you purchased
+## 11. Retention and deletion
 
-We do not use it for advertising, and we do not sell it.
+Anonymous usage events are kept while they remain useful for the purposes above; deleting the App resets your identifier so later events are not linked to it. If you ask us to delete recorded events, we will irreversibly delete them where we can identify them, within 30 days. Because there is no account system, we may ask for your help finding the right records.
 
-## 4. Third-Party Services
+## 12. Your rights and how to use them
 
-We use the following third-party services to operate Casting:
+You may ask to access, correct, delete or restrict processing of your data, or withdraw consent. Email junghoon@getcasting.app; after verifying it is you, we reply within 30 days. A legal guardian or an authorized representative may also make the request.
 
-- **Apple (iCloud / CloudKit)** — stores your saved affirmations in your own private database, which we cannot access. Apple also processes all subscription payments. See [Apple's privacy policy](https://www.apple.com/legal/privacy/).
-- **Supabase** — hosts our affirmation library and receives the anonymous usage events described above. See [Supabase's privacy policy](https://supabase.com/privacy).
-- **Sentry** — receives crash reports and performance diagnostics so we can fix bugs quickly. No PII, no advertising, no behavioral tracking. See [Sentry's privacy policy](https://sentry.io/privacy/).
+## 13. Children
 
-We do not share your information with any other third parties for marketing, advertising, or behavioral analytics.
+Casting is not directed at children under 14, and we do not knowingly collect their personal information. If we learn we have, we delete it.
 
-## 5. Data Retention
+## 14. Security measures
 
-Anonymous usage events tied to your per-install identifier are retained while
-they remain useful for the purposes described above. Deleting the App resets
-your identifier, which disconnects you from the events already recorded.
+- Data is transmitted only over encrypted connections (HTTPS).
+- Stored data is encrypted where our providers support it.
+- Voice and most usage records are kept on your device instead of being sent to a server, which keeps what we hold small.
+- Secrets such as API keys live on the server, not in the App, and access to them is limited to what is necessary.
 
-Your saved affirmations are held in your own private iCloud database and are
-retained until you delete them. Because we cannot access that database, removing
-them is done from within the App or through your iCloud settings — we cannot do
-it on your behalf.
+## 15. Remedies for privacy violations
 
-To request deletion of anonymous usage events already recorded, contact us at the
-address below. Because we have no account system, we may need your help
-identifying the right records.
+If you need to report or seek advice about a privacy violation in South Korea, you can contact:
 
-## 6. Your Rights
+- Personal Information Infringement Report Center (privacy.kisa.or.kr, dial 118)
+- Personal Information Dispute Mediation Committee (kopico.go.kr, 1833-6972)
+- Supreme Prosecutors’ Office (spo.go.kr, dial 1301)
+- Korean National Police Agency Cyber Bureau (ecrm.police.go.kr, dial 182)
 
-You have the right to:
-- Access the data we hold about you
-- Correct inaccurate data
-- Request deletion of your data
-- Export your data
+## 16. Changes to this policy
 
-To exercise any of these rights, email us at [satanclaous@gmail.com](mailto:satanclaous@gmail.com). We will respond within 30 days.
+If this policy changes in a material way, we will update the effective date and tell you in the App.
 
-## 7. Children's Privacy
+---
 
-Casting is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we learn that we have collected such information, we will delete it.
-
-## 8. Security
-
-We use industry-standard security practices (encrypted connections, encrypted data at rest where supported by our service providers) to protect your information. No method of transmission over the internet is 100% secure, but we work to keep your data safe.
-
-## 9. Changes to This Policy
-
-If we make material changes to this Privacy Policy, we will notify you in the App and update the "Last updated" date above. Continued use of the App after changes means you accept the updated policy.
-
-## 10. Contact
-
-If you have questions about this Privacy Policy or your data, contact us at:
-
-**Email**: [satanclaous@gmail.com](mailto:satanclaous@gmail.com)
+[한국어](/casting-pages/privacy-ko/)

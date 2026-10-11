@@ -25,11 +25,14 @@ Casting is preparing for launch. iOS 26+, iPhone.
 
 ## Pages
 
-- [Privacy Policy](/casting-pages/privacy/)
+- [Privacy Policy](/casting-pages/privacy/) · [개인정보처리방침](/casting-pages/privacy-ko/)
+- [getcasting.app](https://getcasting.app)
 - [Support](/casting-pages/support/)
 
 ---
 
 ## Contact
 
-For questions, feedback, or support: [satanclaous@gmail.com](mailto:satanclaous@gmail.com)
+For questions, feedback, or support: [junghoon@getcasting.app](mailto:junghoon@getcasting.app)
+
+Operated by CheonJiIn (천지인).
