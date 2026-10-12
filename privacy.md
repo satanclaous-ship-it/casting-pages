@@ -59,9 +59,11 @@ We use Sentry for crash diagnostics only: stack trace, device model, OS and app 
 
 The current App Store version (v1.0) has no AI features. “Words that know you” is planned for version 2, scheduled for October 2026. Before it ships in the App we will update this policy and tell you in the App. The current design is:
 
-- The text of answers you type or dictate into the interview is sent to Anthropic, PBC’s Claude API to help compose your personal affirmations.
-- Before your first answer is sent, we tell you it goes to an AI service and ask for your explicit consent.
-- Your voice is not sent. The App holds no API key; it calls a server function operated by us.
+- The text of answers you type or dictate into the interview is sent to Anthropic, PBC’s Claude API to compose your personal affirmations. When the evening note feature ships, the evening line you write is sent the same way, under the same consent.
+- Before anything is sent, the interview’s first screen says so and asks for your explicit consent (“Agree and Start”). If you choose “Start Without Sharing”, no interview runs and nothing is sent; your ritual uses Casting’s own sentences for the direction you chose.
+- You can withdraw consent at any time in the App: Settings → Data → AI sharing → “Stop Sharing”. Nothing more is sent after that, and what was already written for you stays on your device. You can also ask us to delete what we hold (section 12).
+- Your voice is not sent. The App holds no API key; it calls a server function operated by us. That function does not keep your answers; it keeps only a rate-limit record (a random device-key identifier and the time of each request).
+- Anthropic’s handling and retention of the text it receives are governed by its commercial terms and privacy policy (anthropic.com/legal/commercial-terms, anthropic.com/legal/privacy); we do not control that retention.
 - A web prototype of the same interview, used for field testing, works the same way: text you enter there passes through our server to Anthropic.
 
 ## 9. The Site, and cookies
