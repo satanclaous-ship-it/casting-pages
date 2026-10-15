@@ -29,7 +29,7 @@ We do not collect payment information, voice, your name, contacts, location, pho
 - Improving the service (learning whether the ritual becomes a habit) — the anonymous identifier and usage events: collected automatically while you use the App and kept while they remain useful for this purpose.
 - Fixing crashes — device model, OS and app version, and the stack trace at the time of a crash: collected automatically when a crash happens and kept while needed to fix it.
 - Answering your messages — your email address and message: collected when you email us and deleted promptly once handled (unless a law requires us to keep it).
-- Composing personal affirmations (planned for version 2, see section 8) — the text of answers you enter in the interview: processed only if you consent.
+- Composing personal affirmations (planned for version 2, see section 8) — the text of answers you enter in the interview, and the name, direction, values and the two “now / then” lines you enter just before it: processed only if you consent.
 
 ## 4. What stays on your device
 
@@ -59,7 +59,7 @@ We use Sentry for crash diagnostics only: stack trace, device model, OS and app 
 
 The current App Store version (v1.0) has no AI features. “Words that know you” is planned for version 2, scheduled for October 2026. Before it ships in the App we will update this policy and tell you in the App. The current design is:
 
-- The text of answers you type or dictate into the interview is sent to Anthropic, PBC’s Claude API to compose your personal affirmations. When the evening note feature ships, the evening line you write is sent the same way, under the same consent.
+- The text of answers you type or dictate into the interview — together with the name, the direction, the one to three values and the two “now / then” lines you enter on the screens just before it, so the interviewer can start from them — is sent to Anthropic, PBC’s Claude API to compose your personal affirmations. Your birthday and your wake and sleep times are not sent. When the evening note feature ships, the evening line you write is sent the same way, under the same consent.
 - Before anything is sent, the interview’s first screen says so and asks for your explicit consent (“Agree and Start”). If you choose “Continue Without Interview”, no interview runs and nothing is sent; your ritual uses Casting’s own sentences for the direction you chose.
 - You can withdraw consent at any time in the App: Settings → Data → AI sharing → “Stop Sharing”. Nothing more is sent after that, and what was already written for you stays on your device. You can also ask us to delete what we hold (section 12).
 - Your voice is not sent. The App holds no API key; it calls a server function operated by us. That function does not keep your answers; it keeps only a rate-limit record (a random device-key identifier and the time of each request).
