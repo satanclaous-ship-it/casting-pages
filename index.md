@@ -33,6 +33,6 @@ Casting is preparing for launch. iOS 26+, iPhone.
 
 ## Contact
 
-For questions, feedback, or support: [junghoon@getcasting.app](mailto:junghoon@getcasting.app)
+For questions, feedback, or support: [jung@getcasting.app](mailto:jung@getcasting.app)
 
 Operated by CheonJiIn (천지인).

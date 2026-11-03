@@ -5,7 +5,7 @@ permalink: /privacy/
 
 # Privacy Policy
 
-**Effective: October 11, 2026** · **Previous version: effective May 10, 2026**
+**Effective: November 3, 2026** · **Previous version: effective October 11, 2026**
 
 > This policy is also published at https://getcasting.app/privacy/ — operated by CheonJiIn (천지인).
 
@@ -15,7 +15,7 @@ CheonJiIn (천지인, “we”) operates the Casting iPhone app (“the App”) 
 
 - Business: CheonJiIn (천지인) — sole proprietorship in South Korea, business registration no. 708-32-01900
 - Representative and privacy officer: Jung Hoon Han (한정훈)
-- Email: junghoon@getcasting.app (questions and access/deletion requests)
+- Email: jung@getcasting.app (questions and access/deletion requests)
 
 ## 2. No account, and the per-install identifier
 
@@ -29,6 +29,7 @@ We do not collect payment information, voice, your name, contacts, location, pho
 - Improving the service (learning whether the ritual becomes a habit) — the anonymous identifier and usage events: collected automatically while you use the App and kept while they remain useful for this purpose.
 - Fixing crashes — device model, OS and app version, and the stack trace at the time of a crash: collected automatically when a crash happens and kept while needed to fix it.
 - Answering your messages — your email address and message: collected when you email us and deleted promptly once handled (unless a law requires us to keep it).
+- In-app requests (“Ask the Developer”, in test builds now and in the App Store from the next version) — the request you write, app and OS version, device model, language setting and a random per-install tag: collected only when you tap Send, delivered to our mailbox, and deleted promptly once handled. We do not receive your name or contact details.
 - Composing personal affirmations (planned for version 2, see section 8) — the text of answers you enter in the interview, and the name, direction, values and the two “now / then” lines you enter just before it: processed only if you consent.
 
 ## 4. What stays on your device
@@ -76,7 +77,7 @@ We use the providers below to run the service and do not give personal informati
 
 - Supabase — stores the anonymous identifier and usage events and serves affirmation content. Storage region: Australia (Sydney). Sent over an encrypted connection while you use the App.
 - Sentry — crash diagnostics (device model, OS and app version, stack trace). Processing region: United States. Sent over an encrypted connection when a crash happens.
-- Cloudflare — serves the Site. Connection records (such as IP addresses) are processed on its global network.
+- Cloudflare — serves the Site and relays in-app requests as email. Connection records (such as IP addresses) are processed on its global network.
 - Apple (iCloud/CloudKit, subscription payments) — stores saved affirmations and handles payment under Apple’s own privacy policy; we cannot access that data.
 - Anthropic, PBC — processes the text you enter in the interview web prototype and, once version 2 ships, interview text you consent to send from the App. Processing region: United States.
 
@@ -86,7 +87,7 @@ Anonymous usage events are kept while they remain useful for the purposes above;
 
 ## 12. Your rights and how to use them
 
-You may ask to access, correct, delete or restrict processing of your data, or withdraw consent. Email junghoon@getcasting.app; after verifying it is you, we reply within 30 days. A legal guardian or an authorized representative may also make the request.
+You may ask to access, correct, delete or restrict processing of your data, or withdraw consent. Email jung@getcasting.app; after verifying it is you, we reply within 30 days. A legal guardian or an authorized representative may also make the request.
 
 ## 13. Children
 
