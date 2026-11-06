@@ -5,7 +5,7 @@ permalink: /privacy/
 
 # Privacy Policy
 
-**Effective: November 6, 2026** · **Previous version: effective November 3, 2026**
+**Effective: November 6, 2026 (revised the same day for the consent screen)** · **Previous version: effective November 3, 2026**
 
 > This policy is also published at https://getcasting.app/privacy/ — operated by CheonJiIn (천지인).
 
@@ -64,7 +64,8 @@ We use Sentry for crash diagnostics only: stack trace, device model, OS and app 
 “Clearing the unconscious” (the belief finder) and the morning and evening rituals show suggestions built from your answers — a new belief, today’s action, something for your evening. They are made like this:
 
 - The answers you write or choose in “Clearing the unconscious” (the scene, the problem, where you feel it in the body, feelings, the old belief, fears, direction, and similar) and what you write or choose in the rituals (the new belief, actions, how you felt before and after, what you write looking back on the day, a summary of the last seven days) pass through a server we operate (Cloudflare Workers) to Anthropic, PBC’s Claude API. Your nickname and record id are not sent to Anthropic.
-- In this version the ritual opens after you finish “Clearing the unconscious”, and there is no separate setting that turns this sending off. If you do not want it, do not start “Clearing the unconscious”; you can ask us to delete what was already sent (section 13). Settings → Your Data → “AI sharing” → “Stop Sharing” applies only to the interview feature, which this version does not use.
+- When you first open the App, before anything is sent, a consent screen asks you to agree to three required items: Terms of Use, collection and use of personal information, and AI-tailored suggestions. Each item’s “View” names the recipient (Anthropic, USA), what is sent and how to stop. Nothing goes to our server or to Anthropic before this agreement.
+- You can withdraw at any time: Settings → Your Data → “AI sharing” → “Stop Sharing”. AI-tailored suggestions are the core of the App, so after withdrawing, Clearing the Unconscious and the rituals wait until you agree again. Your records and sentences stay on your device, and you can ask us to delete what was already sent (section 13).
 - Without a network connection or an answer, the App falls back to built-in lists and no suggestion request is sent.
 - Your voice is not sent. The App holds no API key.
 - Anthropic’s handling and retention of the text it receives are governed by its commercial terms and privacy policy (anthropic.com/legal/commercial-terms, anthropic.com/legal/privacy); we do not control that retention.
